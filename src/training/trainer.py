@@ -8,7 +8,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 import time
 from tqdm import tqdm
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 from ..neural_network.model import AlphaZeroNet
 from ..self_play.self_play import SelfPlay
@@ -46,7 +46,7 @@ class Trainer:
         )
         
         # 混合精度训练
-        self.scaler = GradScaler() if config.USE_AMP else None
+        self.scaler = GradScaler('cuda') if config.USE_AMP else None
         
         # 自我对弈
         self.self_play = SelfPlay(model, config)

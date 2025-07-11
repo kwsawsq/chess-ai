@@ -163,7 +163,7 @@ class MCTS:
             return self.evaluation_cache[board_hash]
         
         # 获取棋盘的规范形式
-        canonical_board = self.game.get_canonical_form(node.board, node.player)
+        canonical_board = node.board.get_canonical_form(node.player)
         
         # 神经网络预测
         policy_probs, value = self.neural_net.predict(canonical_board)

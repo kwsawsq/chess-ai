@@ -7,6 +7,7 @@ import chess
 from typing import List, Tuple, Optional, Dict, Any
 import logging
 from .chess_board import ChessBoard
+import copy
 
 
 class ChessGame:
@@ -33,6 +34,63 @@ class ChessGame:
         
         # 日志记录
         self.logger = logging.getLogger(__name__)
+    
+    def get_board_hash(self) -> str:
+        """
+        获取棋盘状态的哈希值
+        
+        Returns:
+            str: 棋盘状态的哈希值
+        """
+        return self.board.get_board_hash()
+    
+    def get_current_player(self) -> int:
+        """
+        获取当前玩家
+        
+        Returns:
+            int: 当前玩家 (1=白方, -1=黑方)
+        """
+        return self.board.get_current_player()
+    
+    def copy(self) -> 'ChessGame':
+        """
+        创建游戏的深拷贝
+        
+        Returns:
+            ChessGame: 游戏的深拷贝
+        """
+        new_game = ChessGame(self.board.copy())
+        new_game.game_history = copy.deepcopy(self.game_history)
+        new_game.move_count = self.move_count
+        return new_game
+    
+    def get_state(self) -> np.ndarray:
+        """
+        获取当前棋盘状态的规范形式
+        
+        Returns:
+            np.ndarray: 规范形式的棋盘状态 (20, 8, 8)
+        """
+        return self.board.get_canonical_form(self.get_current_player())
+    
+    def is_over(self) -> bool:
+        """
+        检查游戏是否结束
+        
+        Returns:
+            bool: 游戏是否结束
+        """
+        return self.board.is_game_over()
+    
+    def is_game_over(self) -> bool:
+        """
+        检查游戏是否结束
+        
+        Returns:
+            bool: 游戏是否结束
+        """
+        return self.board.is_game_over()
     
     def get_init_board(self) -> ChessBoard:
         """
@@ -128,17 +186,19 @@ class ChessGame:
         else:
             return -1  # 当前玩家失败
     
-    def get_canonical_form(self, board: ChessBoard, player: int) -> np.ndarray:
+    def get_canonical_form(self, board: Optional[ChessBoard] = None, player: Optional[int] = None) -> np.ndarray:
         """
         获取棋盘的规范形式（从当前玩家视角）
         
         Args:
-            board: 棋盘状态
-            player: 当前玩家
+            board: 棋盘状态，如果为None则使用当前棋盘
+            player: 当前玩家，如果为None则使用当前玩家
             
         Returns:
             np.ndarray: 规范形式的棋盘表示 (20, 8, 8)
         """
+        board = board if board is not None else self.board
+        player = player if player is not None else self.get_current_player()
         return board.get_canonical_form(player)
     
     def get_symmetries(self, board: np.ndarray, pi: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:

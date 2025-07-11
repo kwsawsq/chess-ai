@@ -30,9 +30,9 @@ class Config:
         self.DROPOUT_RATE = 0.3
         
         # 神经网络输入输出配置
-        self.IN_CHANNELS = 119  # 输入通道数 (14个棋子类型 * 2个颜色 * 8个历史步骤 + 7个额外特征)
+        self.IN_CHANNELS = 20  # 输入通道数 (12个棋子类型 + 4个重复位置历史 + 4个额外特征)
         self.BOARD_SIZE = 8  # 棋盘大小
-        self.ACTION_SIZE = 4672  # 可能的行动数量 (64 * 73 - 1)
+        self.ACTION_SIZE = 4096  # 可能的行动数量 (64 * 64)
         self.VALUE_HEAD_HIDDEN = 256  # 价值头隐藏层大小
         self.POLICY_HEAD_HIDDEN = 256  # 策略头隐藏层大小
         

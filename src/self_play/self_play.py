@@ -65,13 +65,17 @@ class SelfPlay:
             state = game.get_state()
             
             # MCTS搜索
-            policy, move_probs = self.mcts.search(game)
+            policy, root = self.mcts.search(game.board)
+            
+            # 获取移动概率字典
+            move_probs = root.get_move_probabilities()
             
             # 可视化当前局面
+            _, value = self.model.predict(state)
             self.visualizer.visualize_board(
                 game.board,
                 policy,
-                self.model.predict_value(torch.FloatTensor(state).unsqueeze(0))[0].item(),
+                value,
                 move_probs
             )
             
@@ -86,25 +90,24 @@ class SelfPlay:
             policies.append(policy)
             
             # 执行动作
-            move = game.get_move_from_action(action)
-            game_moves.append(str(move))
-            game.make_move(move)
+            move = game.board.action_to_move(action)
+            if move:
+                game_moves.append(str(move))
+                game.board.make_move(move)
             
             # 计算价值（从当前玩家的角度）
             if game.is_over():
-                if game.is_checkmate():
+                if game.board.is_checkmate():
                     reward = -1
                 else:
                     reward = 0
             else:
-                reward = None
+                _, reward = self.model.predict(game.get_state())
             
-            values.append(reward if reward is not None else self.model.predict_value(
-                torch.FloatTensor(game.get_state()).unsqueeze(0)
-            )[0].item())
+            values.append(reward)
         
         # 保存游戏记录
-        result = "1-0" if game.result() == 1 else "0-1" if game.result() == -1 else "1/2-1/2"
+        result = "1-0" if game.board.get_result() == 1 else "0-1" if game.board.get_result() == -1 else "1/2-1/2"
         self.visualizer.save_game_pgn(game_moves, result)
         
         # 更新统计信息

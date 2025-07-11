@@ -248,26 +248,63 @@ class MCTSNode:
         if self.is_terminal and self.terminal_value is not None:
             # 从当前玩家视角返回终端价值
             if self.terminal_value == 0:
-                return 0.0  # 平局
-            elif self.terminal_value == self.player:
-                return 1.0  # 当前玩家获胜
-            else:
-                return -1.0  # 当前玩家失败
+                return 0
+            return 1 if self.terminal_value == self.player else -1
         
         if self.visit_count == 0:
-            return 0.0
+            return 0
         
         return self.value_sum / self.visit_count
     
+    def get_move_probabilities(self, temperature: float = 1.0) -> Dict[str, float]:
+        """
+        获取基于访问次数的移动概率字典
+        
+        Args:
+            temperature: 温度参数，控制探索程度
+            
+        Returns:
+            Dict[str, float]: 移动概率字典，键为UCI格式的移动，值为概率
+        """
+        move_probs = {}
+        
+        if not self.children:
+            return move_probs
+        
+        # 收集访问次数
+        visit_counts = np.array([child.visit_count for child in self.children.values()])
+        
+        if temperature == 0:
+            # 贪婪选择
+            best_action_idx = np.argmax(visit_counts)
+            best_action = list(self.children.keys())[best_action_idx]
+            move = self.board.action_to_move(best_action)
+            if move:
+                move_probs[move.uci()] = 1.0
+        else:
+            # 温度采样
+            if temperature != 1.0:
+                visit_counts = visit_counts ** (1.0 / temperature)
+            
+            # 归一化
+            total_visits = np.sum(visit_counts)
+            if total_visits > 0:
+                for i, (action, child) in enumerate(self.children.items()):
+                    move = self.board.action_to_move(action)
+                    if move:
+                        move_probs[move.uci()] = visit_counts[i] / total_visits
+        
+        return move_probs
+    
     def add_dirichlet_noise(self, epsilon: float = 0.25, alpha: float = 0.3):
         """
-        为根节点添加狄利克雷噪声
+        为根节点的先验概率添加狄利克雷噪声
         
         Args:
             epsilon: 噪声权重
-            alpha: 狄利克雷参数
+            alpha: 狄利克雷分布参数
         """
-        if not self.children or not self.is_root():
+        if not self.children:
             return
         
         actions = list(self.children.keys())
@@ -279,16 +316,18 @@ class MCTSNode:
     
     def get_path_to_root(self) -> List['MCTSNode']:
         """
-        获取从此节点到根节点的路径
+        获取从当前节点到根节点的路径
         
         Returns:
-            List[MCTSNode]: 节点路径
+            List[MCTSNode]: 节点列表
         """
-        path = []
-        node = self
-        while node is not None:
-            path.append(node)
-            node = node.parent
+        path = [self]
+        current = self
+        
+        while current.parent:
+            current = current.parent
+            path.append(current)
+        
         return path
     
     def get_depth(self) -> int:
@@ -299,22 +338,26 @@ class MCTSNode:
             int: 深度
         """
         depth = 0
-        node = self.parent
-        while node is not None:
+        current = self
+        
+        while current.parent:
             depth += 1
-            node = node.parent
+            current = current.parent
+        
         return depth
     
     def get_subtree_size(self) -> int:
         """
-        获取子树大小
+        获取以当前节点为根的子树大小
         
         Returns:
-            int: 子树节点数量
+            int: 子树大小
         """
-        size = 1
+        size = 1  # 当前节点
+        
         for child in self.children.values():
             size += child.get_subtree_size()
+        
         return size
     
     def get_stats(self) -> Dict[str, Any]:
@@ -326,8 +369,7 @@ class MCTSNode:
         """
         stats = {
             'visit_count': self.visit_count,
-            'value_sum': self.value_sum,
-            'average_value': self.get_value(),
+            'value': self.get_value(),
             'prior_prob': self.prior_prob,
             'is_expanded': self.is_expanded,
             'is_terminal': self.is_terminal,
@@ -336,11 +378,13 @@ class MCTSNode:
             'player': self.player
         }
         
-        if self.action is not None:
-            stats['action'] = self.action
-        
-        if self.terminal_value is not None:
+        if self.is_terminal:
             stats['terminal_value'] = self.terminal_value
+        
+        if self.action is not None:
+            move = self.board.action_to_move(self.action)
+            if move:
+                stats['move'] = move.uci()
         
         return stats
     
@@ -355,16 +399,21 @@ class MCTSNode:
         Returns:
             str: 树结构字符串
         """
-        lines = []
+        if max_depth < 0:
+            return ""
         
-        # 当前节点信息
-        node_info = f"{indent}Action: {self.action}, Visits: {self.visit_count}, Value: {self.get_value():.3f}"
-        if self.is_terminal:
-            node_info += " [TERMINAL]"
-        lines.append(node_info)
+        result = []
+        stats = self.get_stats()
         
-        # 子节点信息
-        if max_depth > 0 and self.children:
+        # 节点信息
+        node_info = f"访问={stats['visit_count']} 价值={stats['value']:.3f}"
+        if 'move' in stats:
+            node_info = f"移动={stats['move']} " + node_info
+        
+        result.append(indent + node_info)
+        
+        # 子节点
+        if self.children and max_depth > 0:
             sorted_children = sorted(
                 self.children.items(),
                 key=lambda x: x[1].visit_count,
@@ -372,14 +421,14 @@ class MCTSNode:
             )
             
             for action, child in sorted_children[:5]:  # 只显示前5个最常访问的子节点
-                lines.append(child.print_tree(max_depth - 1, indent + "  "))
+                result.append(child.print_tree(max_depth - 1, indent + "  "))
         
-        return "\n".join(lines)
+        return "\n".join(result)
     
     def __str__(self) -> str:
         """字符串表示"""
-        return (f"MCTSNode(action={self.action}, visits={self.visit_count}, "
-                f"value={self.get_value():.3f}, children={len(self.children)})")
+        stats = self.get_stats()
+        return f"MCTSNode(访问={stats['visit_count']}, 价值={stats['value']:.3f})"
     
     def __repr__(self) -> str:
         """调试表示"""

@@ -1,6 +1,8 @@
 """
 结果可视化工具
 """
+import matplotlib
+matplotlib.use('agg')  # 在导入pyplot之前设置后端
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Dict, List, Any, Optional
@@ -33,6 +35,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(2, 2, figsize=figsize)
         fig.suptitle('AlphaZero 训练历史', fontsize=16)
         
@@ -92,6 +95,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(2, 2, figsize=figsize)
         fig.suptitle('自我对弈统计', fontsize=16)
         
@@ -148,6 +152,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(1, 2, figsize=figsize)
         fig.suptitle('模型比较', fontsize=16)
         
@@ -192,6 +197,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(1, 2, figsize=figsize)
         fig.suptitle('MCTS 分析', fontsize=16)
         
@@ -228,6 +234,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(1, 2, figsize=figsize)
         fig.suptitle('损失曲线', fontsize=16)
         
@@ -276,6 +283,7 @@ class ResultVisualizer:
             save_path: 保存路径
             figsize: 图表大小
         """
+        plt.close('all') # 关闭所有打开的图形
         fig = plt.figure(figsize=figsize)
         gs = fig.add_gridspec(3, 4, hspace=0.3, wspace=0.3)
         
@@ -372,6 +380,7 @@ from typing import List, Tuple, Dict, Optional
 import time
 import os
 from datetime import datetime
+from ..game.chess_board import ChessBoard
 
 
 class TrainingVisualizer:
@@ -401,9 +410,39 @@ class TrainingVisualizer:
         
         # 初始化matplotlib
         plt.style.use('seaborn')
+        
+        # 棋子符号映射
+        self.piece_symbols = {
+            'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+            'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚',
+            '.': ' '
+        }
+    
+    def _create_board_image(self, board: chess.Board) -> np.ndarray:
+        """
+        创建棋盘图像
+        
+        Args:
+            board: 棋盘对象
+            
+        Returns:
+            np.ndarray: 棋盘图像数组
+        """
+        # 创建8x8的图像数组
+        board_array = np.zeros((8, 8, 3))
+        
+        # 设置棋盘格颜色
+        for i in range(8):
+            for j in range(8):
+                if (i + j) % 2 == 0:
+                    board_array[i, j] = [0.9, 0.9, 0.8]  # 浅色格
+                else:
+                    board_array[i, j] = [0.5, 0.5, 0.4]  # 深色格
+        
+        return board_array
     
     def visualize_board(self,
-                       board: chess.Board,
+                       board: ChessBoard,
                        policy: np.ndarray,
                        value: float,
                        move_probs: Dict[str, float],
@@ -423,12 +462,25 @@ class TrainingVisualizer:
         
         # 1. 棋盘状态
         ax1 = plt.subplot(121)
-        svg = chess.svg.board(board, size=400)
-        with open(os.path.join(self.session_dir, 'temp.svg'), 'w') as f:
-            f.write(svg)
-        img = plt.imread(os.path.join(self.session_dir, 'temp.svg'))
-        ax1.imshow(img)
-        ax1.axis('off')
+        board_image = self._create_board_image(board.board)
+        ax1.imshow(board_image)
+        
+        # 添加棋子
+        for i in range(8):
+            for j in range(8):
+                square = chess.square(j, 7-i)  # chess库使用的是从下到上的坐标
+                piece = board.board.piece_at(square)
+                if piece:
+                    color = 'white' if piece.color else 'black'
+                    ax1.text(j, i, self.piece_symbols[piece.symbol()],
+                            ha='center', va='center', color=color,
+                            fontsize=20)
+        
+        # 添加坐标标签
+        ax1.set_xticks(range(8))
+        ax1.set_xticklabels(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
+        ax1.set_yticks(range(8))
+        ax1.set_yticklabels(['8', '7', '6', '5', '4', '3', '2', '1'])
         
         # 2. 移动概率分布
         ax2 = plt.subplot(122)
@@ -475,6 +527,7 @@ class TrainingVisualizer:
             stats: 训练统计数据
             save: 是否保存图像
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
         
         # 1. 总损失
@@ -524,6 +577,7 @@ class TrainingVisualizer:
             win_rates: 胜率列表
             save: 是否保存图像
         """
+        plt.close('all') # 关闭所有打开的图形
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
         
         # 1. 游戏长度分布
