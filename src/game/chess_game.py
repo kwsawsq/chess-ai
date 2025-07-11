@@ -5,6 +5,7 @@
 import chess
 import numpy as np
 from typing import List, Optional, Tuple
+from .chess_board import ChessBoard
 
 class ChessGame:
     """国际象棋游戏"""
@@ -16,7 +17,7 @@ class ChessGame:
         Args:
             config: 配置对象
         """
-        self.board = chess.Board()
+        self.board = ChessBoard()  # 使用我们的ChessBoard类
         self.config = config
         self.move_history = []  # 记录所有移动
     
@@ -27,8 +28,11 @@ class ChessGame:
         Returns:
             np.ndarray: 状态数组
         """
-        # 实现状态转换逻辑
-        pass
+        # 获取当前玩家
+        current_player = self.board.get_current_player()
+        
+        # 获取规范形式的状态
+        return self.board.get_canonical_form(current_player)
     
     def select_move(self, policy: np.ndarray) -> str:
         """
@@ -41,13 +45,13 @@ class ChessGame:
             str: 选择的移动（UCI格式）
         """
         # 获取所有合法移动
-        legal_moves = list(self.board.legal_moves)
+        legal_moves = self.board.get_legal_moves()
         
         # 将策略限制在合法移动范围内
         legal_policy = np.zeros_like(policy)
         for move in legal_moves:
-            move_idx = self.move_to_index(move)
-            if move_idx < len(policy):
+            move_idx = self.board.move_to_action(move)
+            if move_idx is not None and move_idx < len(policy):
                 legal_policy[move_idx] = policy[move_idx]
         
         # 归一化概率
@@ -66,37 +70,38 @@ class ChessGame:
             move_idx = np.argmax(legal_policy)
         
         # 将索引转换为移动
+        selected_move = None
         for move in legal_moves:
-            if self.move_to_index(move) == move_idx:
+            if self.board.move_to_action(move) == move_idx:
                 selected_move = move
                 break
-        else:
+        
+        if selected_move is None:
             # 如果没有找到对应的移动，随机选择一个合法移动
             selected_move = np.random.choice(legal_moves)
         
-        # 转换为SAN格式并记录
-        move_san = self.board.san(selected_move)
-        self.move_history.append(move_san)
+        # 转换为UCI格式并记录
+        move_uci = selected_move.uci()
+        self.move_history.append(move_uci)
         
-        return move_san
+        return move_uci
     
-    def make_move(self, move_san: str) -> bool:
+    def make_move(self, move_uci: str) -> bool:
         """
         执行移动
         
         Args:
-            move_san: SAN格式的移动
+            move_uci: UCI格式的移动
             
         Returns:
             bool: 移动是否成功
         """
         try:
-            # 将SAN格式转换为Move对象并执行
-            move = self.board.parse_san(move_san)
-            self.board.push(move)
-            return True
+            # 将UCI格式转换为Move对象并执行
+            move = chess.Move.from_uci(move_uci)
+            return self.board.make_move(move)
         except ValueError:
-            print(f"无效的移动: {move_san}")
+            print(f"无效的移动: {move_uci}")
             return False
     
     def is_over(self) -> bool:
@@ -115,77 +120,8 @@ class ChessGame:
         Returns:
             int: 1(白胜)/-1(黑胜)/0(和棋)
         """
-        if not self.board.is_game_over():
-            return 0
-            
-        result = self.board.result()
-        if result == "1-0":
-            return 1
-        elif result == "0-1":
-            return -1
-        else:
-            return 0
-    
-    def move_to_index(self, move: chess.Move) -> int:
-        """
-        将Move对象转换为策略数组的索引
-        
-        Args:
-            move: 棋步
-            
-        Returns:
-            int: 索引
-        """
-        # 计算起始格和目标格的索引
-        from_square = move.from_square
-        to_square = move.to_square
-        
-        # 计算基础索引
-        base_index = from_square * 64 + to_square
-        
-        # 如果是升变，添加升变类型的偏移
-        if move.promotion:
-            promotion_offset = {
-                chess.QUEEN: 0,
-                chess.ROOK: 1,
-                chess.BISHOP: 2,
-                chess.KNIGHT: 3
-            }
-            base_index += promotion_offset[move.promotion] * 64 * 64
-        
-        return base_index
-    
-    def index_to_move(self, index: int) -> Optional[chess.Move]:
-        """
-        将索引转换为Move对象
-        
-        Args:
-            index: 策略数组的索引
-            
-        Returns:
-            Optional[chess.Move]: 棋步对象
-        """
-        # 提取升变类型
-        promotion_type = index // (64 * 64)
-        remaining_index = index % (64 * 64)
-        
-        # 提取起始格和目标格
-        from_square = remaining_index // 64
-        to_square = remaining_index % 64
-        
-        # 创建基础移动
-        move = chess.Move(from_square, to_square)
-        
-        # 添加升变类型
-        if promotion_type > 0:
-            promotion_pieces = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
-            if promotion_type <= len(promotion_pieces):
-                move.promotion = promotion_pieces[promotion_type - 1]
-        
-        # 验证移动的合法性
-        if move in self.board.legal_moves:
-            return move
-        return None
+        result = self.board.get_result()
+        return result if result is not None else 0
     
     def __str__(self) -> str:
         """字符串表示"""
