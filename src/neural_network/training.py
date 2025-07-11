@@ -5,6 +5,8 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.backends.cudnn as cudnn
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
@@ -13,6 +15,10 @@ import logging
 import time
 import os
 from .model import AlphaZeroNet, AlphaZeroLoss
+
+
+# 启用cuDNN自动调优
+cudnn.benchmark = True
 
 
 class ChessDataset(Dataset):
@@ -85,6 +91,9 @@ class NetworkTrainer:
             verbose=True
         )
         
+        # 混合精度训练
+        self.scaler = GradScaler()
+        
         # TensorBoard
         self.writer = None
         self.setup_tensorboard()
@@ -138,29 +147,33 @@ class NetworkTrainer:
         start_time = time.time()
         
         for batch_idx, (boards, target_policies, target_values) in enumerate(train_loader):
-            # 移动数据到设备
-            boards = boards.to(self.device)
-            target_policies = target_policies.to(self.device)
-            target_values = target_values.to(self.device)
+            # 移动数据到设备（启用异步传输）
+            boards = boards.to(self.device, non_blocking=True)
+            target_policies = target_policies.to(self.device, non_blocking=True)
+            target_values = target_values.to(self.device, non_blocking=True)
             
-            # 前向传播
-            policy_logits, value_pred = self.model(boards)
+            # 使用混合精度训练
+            with autocast():
+                # 前向传播
+                policy_logits, value_pred = self.model(boards)
+                
+                # 计算损失
+                loss, loss_dict = self.criterion(
+                    policy_logits, value_pred,
+                    target_policies, target_values
+                )
             
-            # 计算损失
-            loss, loss_dict = self.criterion(
-                policy_logits, value_pred,
-                target_policies, target_values
-            )
-            
-            # 反向传播
+            # 反向传播（使用GradScaler）
             self.optimizer.zero_grad()
-            loss.backward()
+            self.scaler.scale(loss).backward()
             
             # 梯度裁剪
+            self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             
             # 更新参数
-            self.optimizer.step()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
             
             # 累积损失
             total_loss += loss_dict['total_loss']
@@ -174,6 +187,11 @@ class NetworkTrainer:
                 self.writer.add_scalar('Loss/Train_Policy', loss_dict['policy_loss'], self.global_step)
                 self.writer.add_scalar('Loss/Train_Value', loss_dict['value_loss'], self.global_step)
                 self.writer.add_scalar('Learning_Rate', self.optimizer.param_groups[0]['lr'], self.global_step)
+                
+                # 添加GPU利用率监控
+                if torch.cuda.is_available():
+                    self.writer.add_scalar('GPU/Memory_Allocated', torch.cuda.memory_allocated(self.device) / 1024**2, self.global_step)
+                    self.writer.add_scalar('GPU/Memory_Reserved', torch.cuda.memory_reserved(self.device) / 1024**2, self.global_step)
             
             self.global_step += 1
             
@@ -218,6 +236,7 @@ class NetworkTrainer:
             self.writer.add_scalar('Loss/Train_Epoch_Total', avg_total_loss, self.epoch_count)
             self.writer.add_scalar('Loss/Train_Epoch_Policy', avg_policy_loss, self.epoch_count)
             self.writer.add_scalar('Loss/Train_Epoch_Value', avg_value_loss, self.epoch_count)
+            self.writer.add_scalar('Time/Epoch', epoch_time, self.epoch_count)
             
             if val_stats:
                 self.writer.add_scalar('Loss/Val_Total', val_stats['total_loss'], self.epoch_count)
@@ -245,12 +264,12 @@ class NetworkTrainer:
         total_value_loss = 0.0
         num_batches = 0
         
-        with torch.no_grad():
+        with torch.no_grad(), autocast():
             for boards, target_policies, target_values in val_loader:
-                # 移动数据到设备
-                boards = boards.to(self.device)
-                target_policies = target_policies.to(self.device)
-                target_values = target_values.to(self.device)
+                # 移动数据到设备（启用异步传输）
+                boards = boards.to(self.device, non_blocking=True)
+                target_policies = target_policies.to(self.device, non_blocking=True)
+                target_values = target_values.to(self.device, non_blocking=True)
                 
                 # 前向传播
                 policy_logits, value_pred = self.model(boards)
@@ -269,9 +288,9 @@ class NetworkTrainer:
         
         # 计算平均损失
         return {
-            'val_total_loss': total_loss / num_batches,
-            'val_policy_loss': total_policy_loss / num_batches,
-            'val_value_loss': total_value_loss / num_batches
+            'total_loss': total_loss / num_batches,
+            'policy_loss': total_policy_loss / num_batches,
+            'value_loss': total_value_loss / num_batches
         }
     
     def train(self, 
@@ -282,58 +301,65 @@ class NetworkTrainer:
         训练模型
         
         Args:
-            train_data: 训练数据 (boards, policies, values)
-            val_data: 验证数据
-            epochs: 训练轮数
+            train_data: 训练数据元组 (boards, policies, values)
+            val_data: 验证数据元组 (boards, policies, values)
+            epochs: 训练轮数，如果为None则使用配置中的值
             
         Returns:
             Dict[str, List[float]]: 训练历史
         """
-        epochs = epochs or self.config.EPOCHS
-        
         # 创建数据集
         train_dataset = ChessDataset(*train_data)
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.config.BATCH_SIZE,
             shuffle=True,
-            num_workers=2,
-            pin_memory=True if self.device.type == 'cuda' else False
+            num_workers=self.config.NUM_WORKERS,
+            pin_memory=True,  # 启用锁页内存
+            prefetch_factor=2,  # 预取2个batch的数据
+            persistent_workers=True,  # 保持工作进程存活
+            drop_last=True  # 丢弃不完整的batch以优化性能
         )
         
         val_loader = None
-        if val_data:
+        if val_data is not None:
             val_dataset = ChessDataset(*val_data)
             val_loader = DataLoader(
                 val_dataset,
-                batch_size=self.config.BATCH_SIZE,
+                batch_size=self.config.BATCH_SIZE * 2,  # 验证时可以用更大的batch
                 shuffle=False,
-                num_workers=2,
-                pin_memory=True if self.device.type == 'cuda' else False
+                num_workers=self.config.NUM_WORKERS,
+                pin_memory=True,
+                prefetch_factor=2,
+                persistent_workers=True,
+                drop_last=False  # 验证时保留所有数据
             )
         
-        self.logger.info(f"开始训练，总轮数: {epochs}")
-        self.logger.info(f"训练数据: {len(train_dataset)} 样本")
-        if val_data:
-            self.logger.info(f"验证数据: {len(val_dataset)} 样本")
+        # 设置训练轮数
+        epochs = epochs or self.config.NUM_EPOCHS
         
         # 训练循环
         for epoch in range(epochs):
-            self.logger.info(f"\n开始训练 Epoch {epoch + 1}/{epochs}")
+            self.logger.info(f"Epoch {epoch + 1}/{epochs}")
             
             # 训练一个epoch
-            epoch_stats = self.train_epoch(train_loader, val_loader)
+            stats = self.train_epoch(train_loader, val_loader)
             
             # 打印统计信息
             self.logger.info(
-                f"Epoch {epoch + 1} 完成 - "
-                f"训练损失: {epoch_stats['total_loss']:.4f}, "
-                f"验证损失: {epoch_stats.get('val_total_loss', 'N/A')}, "
-                f"学习率: {epoch_stats['learning_rate']:.6f}, "
-                f"时间: {epoch_stats['epoch_time']:.2f}s"
+                f"Train Loss: {stats['total_loss']:.4f}, "
+                f"Policy Loss: {stats['policy_loss']:.4f}, "
+                f"Value Loss: {stats['value_loss']:.4f}, "
+                f"Time: {stats['epoch_time']:.2f}s"
             )
+            
+            if val_loader:
+                self.logger.info(
+                    f"Val Loss: {stats.get('val_total_loss', 0):.4f}, "
+                    f"Val Policy Loss: {stats.get('val_policy_loss', 0):.4f}, "
+                    f"Val Value Loss: {stats.get('val_value_loss', 0):.4f}"
+                )
         
-        self.logger.info("训练完成")
         return self.training_history
     
     def evaluate_model(self, test_data: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> Dict[str, float]:
