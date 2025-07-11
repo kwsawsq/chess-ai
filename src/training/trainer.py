@@ -127,10 +127,7 @@ class Trainer:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
     
-    def _train_epoch(self,
-                     states: np.ndarray,
-                     policies: np.ndarray,
-                     values: np.ndarray) -> Tuple[float, float, float]:
+    def _train_epoch(self, states, policies, values):
         """
         训练一个epoch
         
@@ -140,28 +137,29 @@ class Trainer:
             values: 价值数据
             
         Returns:
-            Tuple[float, float, float]: (总损失, 策略损失, 价值损失)
+            tuple: (总损失, 策略损失, 价值损失)
         """
-        self.model.train()
-        
-        # 转换为张量并固定内存
-        print("准备训练数据...")
-        states = torch.from_numpy(states).float().pin_memory().to(self.device, non_blocking=True)
-        policies = torch.from_numpy(policies).float().pin_memory().to(self.device, non_blocking=True)
-        values = torch.from_numpy(values).float().pin_memory().to(self.device, non_blocking=True)
+        if len(states) == 0:
+            self.logger.warning("没有训练数据，跳过本次训练")
+            return 0.0, 0.0, 0.0
+            
+        # 转换为tensor
+        states = torch.FloatTensor(states).to(self.device)
+        policies = torch.FloatTensor(policies).to(self.device)
+        values = torch.FloatTensor(values).to(self.device)
         
         # 计算批次数
         num_samples = len(states)
-        batch_size = self.config.BATCH_SIZE
+        batch_size = min(self.config.BATCH_SIZE, num_samples)
         num_batches = (num_samples + batch_size - 1) // batch_size
         
+        # 初始化损失
         total_loss = 0.0
         total_policy_loss = 0.0
         total_value_loss = 0.0
         
-        # 批次训练
-        progress_bar = tqdm(range(num_batches), desc="训练批次", 
-                           bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
+        # 创建进度条
+        progress_bar = tqdm(range(num_batches), desc="训练批次")
         
         for i in progress_bar:
             start_idx = i * batch_size

@@ -1,12 +1,25 @@
 """
 自我对弈模块
+实现AI之间的对弈
 """
 
+import os
+import time
+import logging
 import numpy as np
-import torch
-import random
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Optional, Dict, Any
 from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import torch
+
+# 设置多进程启动方法为'spawn'
+if torch.cuda.is_available():
+    multiprocessing.set_start_method('spawn', force=True)
+
+from ..game import ChessGame, ChessBoard
+from ..neural_network import AlphaZeroNet
+from ..mcts import MCTS
+import random
 from tqdm import tqdm
 import sys
 from ..evaluation.visualizer import ResultVisualizer
