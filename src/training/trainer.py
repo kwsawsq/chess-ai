@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import time
 from tqdm import tqdm
 from torch.amp import autocast, GradScaler
+import sys
 
 from ..neural_network.model import AlphaZeroNet
 from ..self_play.self_play import SelfPlay
@@ -84,11 +85,13 @@ class Trainer:
             self.logger.info(f"迭代 {iteration + 1}/{num_iterations}")
             
             # 1. 自我对弈生成数据
+            print(f"\n生成自我对弈数据 ({self.config.NUM_SELF_PLAY_GAMES} 局游戏)...")
             states, policies, values = self.self_play.generate_games(
                 self.config.NUM_SELF_PLAY_GAMES
             )
             
             # 2. 训练模型
+            print("\n开始训练模型...")
             total_loss, policy_loss, value_loss = self._train_epoch(
                 states, policies, values
             )
@@ -104,18 +107,21 @@ class Trainer:
             self.stats['learning_rate'].append(current_lr)
             
             # 5. 可视化训练过程
+            print("\n生成训练统计图...")
             self.visualizer.plot_training_stats(self.stats)
             
             # 6. 输出进度
             iteration_time = time.time() - iteration_start
-            self.logger.info(
-                f"迭代 {iteration + 1} 完成 "
-                f"(用时: {iteration_time:.2f}s): "
+            progress_msg = (
+                f"\n迭代 {iteration + 1}/{num_iterations} 完成 "
+                f"(用时: {iteration_time:.2f}s):\n"
                 f"总损失={total_loss:.4f}, "
                 f"策略损失={policy_loss:.4f}, "
                 f"价值损失={value_loss:.4f}, "
                 f"学习率={current_lr:.6f}"
             )
+            print(progress_msg)
+            self.logger.info(progress_msg)
             
             # 7. 清理GPU内存
             if torch.cuda.is_available():
@@ -139,6 +145,7 @@ class Trainer:
         self.model.train()
         
         # 转换为张量并固定内存
+        print("准备训练数据...")
         states = torch.from_numpy(states).float().pin_memory().to(self.device, non_blocking=True)
         policies = torch.from_numpy(policies).float().pin_memory().to(self.device, non_blocking=True)
         values = torch.from_numpy(values).float().pin_memory().to(self.device, non_blocking=True)
@@ -153,7 +160,10 @@ class Trainer:
         total_value_loss = 0.0
         
         # 批次训练
-        for i in tqdm(range(num_batches), desc="训练批次"):
+        progress_bar = tqdm(range(num_batches), desc="训练批次", 
+                           bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
+        
+        for i in progress_bar:
             start_idx = i * batch_size
             end_idx = min((i + 1) * batch_size, num_samples)
             
@@ -212,6 +222,16 @@ class Trainer:
             total_loss += loss.item()
             total_policy_loss += policy_loss.item()
             total_value_loss += value_loss.item()
+            
+            # 更新进度条
+            progress_bar.set_postfix({
+                'loss': f'{loss.item():.4f}',
+                'policy_loss': f'{policy_loss.item():.4f}',
+                'value_loss': f'{value_loss.item():.4f}'
+            })
+            
+            # 实时刷新输出
+            sys.stdout.flush()
         
         # 计算平均损失
         avg_loss = total_loss / num_batches

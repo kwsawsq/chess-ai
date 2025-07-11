@@ -3,11 +3,14 @@
 """
 import matplotlib
 matplotlib.use('agg')  # 在导入pyplot之前设置后端
+matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'sans-serif']  # 设置字体
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Dict, List, Any, Optional
 import seaborn as sns
 import pandas as pd
+from tqdm import tqdm
 
 
 class ResultVisualizer:
@@ -457,6 +460,9 @@ class TrainingVisualizer:
             move_probs: 移动概率字典
             save: 是否保存图像
         """
+        # 显示进度
+        print(f"\r正在生成可视化图像... 游戏 {self.game_count}, 步数 {self.move_count}", end="")
+        
         # 创建图形
         fig = plt.figure(figsize=(15, 8))
         
