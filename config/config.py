@@ -36,14 +36,14 @@ class Config:
         self.VALUE_HEAD_HIDDEN = 512  # 增加价值头隐藏层大小
         self.POLICY_HEAD_HIDDEN = 512  # 增加策略头隐藏层大小
         
-        # MCTS配置
-        self.NUM_MCTS_SIMS = 800  # 增加MCTS模拟次数以提高性能
+        # MCTS配置 - 减少并行搜索以避免资源竞争
+        self.NUM_MCTS_SIMS = 400  # 减少MCTS模拟次数以降低资源竞争
         self.C_PUCT = 1.0  # PUCT常数
         self.DIRICHLET_ALPHA = 0.3  # 狄利克雷噪声参数alpha
         self.DIRICHLET_EPSILON = 0.25  # 狄利克雷噪声权重
         
         # 训练配置 - 优化批处理大小和工作进程
-        self.BATCH_SIZE = 1024  # 增大批量大小以充分利用4090显存
+        self.BATCH_SIZE = 512  # 减小批量大小以降低内存压力
         self.NUM_EPOCHS = 20
         self.LEARNING_RATE = 0.002  # 略微提高学习率
         self.WEIGHT_DECAY = 1e-4
@@ -56,10 +56,10 @@ class Config:
         # 训练迭代次数
         self.NUM_ITERATIONS = 1000  # 总训练迭代次数
         
-        # 自我对弈配置 - 增加并行度
-        self.NUM_SELF_PLAY_GAMES = 200  # 增加自我对弈游戏数
-        self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 12  # 增加数据加载的工作进程数（16核CPU可以支持更多worker）
+        # 自我对弈配置 - 减少并行度以避免资源竞争
+        self.NUM_SELF_PLAY_GAMES = 100  # 减少自我对弈游戏数
+        self.PARALLEL_GAMES = 8  # 减少并行游戏数
+        self.NUM_WORKERS = 6  # 减少工作进程数以避免线程锁
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
@@ -72,9 +72,9 @@ class Config:
         # 混合精度训练
         self.USE_AMP = True  # 启用自动混合精度
         
-        # 缓存设置 - 增加缓存大小
-        self.REPLAY_BUFFER_SIZE = 200000  # 增加回放缓冲区大小
-        self.MIN_REPLAY_SIZE = 2000
+        # 缓存设置 - 减小缓存大小以降低内存压力
+        self.REPLAY_BUFFER_SIZE = 100000  # 减小回放缓冲区大小
+        self.MIN_REPLAY_SIZE = 1000
         
         # 保存和加载
         self.SAVE_INTERVAL = 100
@@ -84,16 +84,16 @@ class Config:
         self.TENSORBOARD_LOG_DIR = os.path.join(self.LOG_DIR, 'tensorboard')
         self.ENABLE_LOGGING = True
         
-        # 性能优化 - 4090优化
+        # 性能优化 - 减少资源竞争
         self.PIN_MEMORY = True  # 启用PIN_MEMORY
         self.ASYNC_LOADING = True  # 启用异步数据加载
-        self.PREFETCH_FACTOR = 4  # 增加预取因子
+        self.PREFETCH_FACTOR = 2  # 减小预取因子
         
         # CUDA优化
         if self.USE_GPU:
-            self.CUDA_LAUNCH_BLOCKING = "0"  # 禁用CUDA启动阻塞
+            os.environ['CUDA_LAUNCH_BLOCKING'] = '1'  # 启用CUDA启动阻塞以提高稳定性
             torch.backends.cudnn.benchmark = True  # 启用cuDNN基准测试
-            torch.backends.cudnn.deterministic = False  # 关闭确定性模式以提高性能
+            torch.backends.cudnn.deterministic = True  # 启用确定性模式以提高稳定性
             torch.backends.cuda.matmul.allow_tf32 = True  # 启用TF32
             torch.backends.cudnn.allow_tf32 = True  # 启用cuDNN TF32
         
