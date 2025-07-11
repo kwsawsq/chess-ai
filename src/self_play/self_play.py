@@ -5,26 +5,16 @@
 import numpy as np
 import torch
 import random
-from typing import List, Tuple, Dict, Optional
-import logging
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-import time
+from typing import List, Tuple, Dict
+from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
 import sys
-
-from ..game.chess_game import ChessGame
-from ..mcts.mcts import MCTS
-
-# 移除直接导入
-# from ..evaluation.visualizer import TrainingVisualizer
-
+from ..evaluation.visualizer import ResultVisualizer
 
 class SelfPlay:
-    """自我对弈系统"""
-    
     def __init__(self, model, config):
         """
-        初始化自我对弈系统
+        初始化自我对弈模块
         
         Args:
             model: 神经网络模型
@@ -32,93 +22,48 @@ class SelfPlay:
         """
         self.model = model
         self.config = config
-        self.mcts = MCTS(model, config)
-        self.logger = logging.getLogger(__name__)
+        self.visualizer = ResultVisualizer()
         
-        # 延迟导入以避免循环依赖
-        from ..evaluation.visualizer import TrainingVisualizer
-        
-        # 可视化器
-        self.visualizer = TrainingVisualizer(config)
-        
-        # 训练统计
-        self.game_lengths = []
-        self.win_rates = []
-        
-    def play_game(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
+    def _play_game(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
         """
         进行一局自我对弈
         
         Returns:
             Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
-                - 状态历史
-                - 策略历史
-                - 价值历史
+                - 状态列表
+                - 策略列表
+                - 价值列表
         """
-        game = ChessGame()
+        game = ChessGame(self.config)
         states, policies, values = [], [], []
-        game_moves = []
-        
-        # 通知可视化器开始新游戏
-        self.visualizer.new_game()
+        moves = []  # 记录游戏的所有移动
         
         while not game.is_over():
-            # 获取当前状态
             state = game.get_state()
+            policy, value = self.model.predict(state)
             
-            # MCTS搜索
-            policy, root = self.mcts.search(game.board)
-            
-            # 获取移动概率字典
-            move_probs = root.get_move_probabilities()
-            
-            # 可视化当前局面
-            _, value = self.model.predict(state)
-            self.visualizer.visualize_board(
-                game.board,
-                policy,
-                value,
-                move_probs
-            )
-            
-            # 选择动作
-            if len(states) < self.config.TEMP_THRESHOLD:
-                action = np.random.choice(len(policy), p=policy)
-            else:
-                action = np.argmax(policy)
-            
-            # 记录数据
+            # 记录当前状态
             states.append(state)
             policies.append(policy)
+            values.append(value)
             
-            # 执行动作
-            move = game.board.action_to_move(action)
-            if move:
-                game_moves.append(str(move))
-                game.board.make_move(move)
+            # 选择移动
+            move = game.select_move(policy)
+            moves.append(move)
             
-            # 计算价值（从当前玩家的角度）
-            if game.is_over():
-                if game.board.is_checkmate():
-                    reward = -1
-                else:
-                    reward = 0
-            else:
-                _, reward = self.model.predict(game.get_state())
-            
-            values.append(reward)
+            # 执行移动
+            game.make_move(move)
         
-        # 保存游戏记录
-        result = "1-0" if game.board.get_result() == 1 else "0-1" if game.board.get_result() == -1 else "1/2-1/2"
-        self.visualizer.save_game_pgn(game_moves, result)
+        # 获取游戏结果
+        result = game.get_result()
+        result_str = "1-0" if result == 1 else "0-1" if result == -1 else "1/2-1/2"
         
-        # 更新统计信息
-        self.game_lengths.append(len(game_moves))
-        win_rate = sum(1 for v in values if v > 0) / len(values)
-        self.win_rates.append(win_rate)
+        # 可视化游戏
+        self.visualizer.display_game(moves, result_str)
         
-        # 绘制统计图表
-        self.visualizer.plot_game_stats(self.game_lengths, self.win_rates)
+        # 根据最终结果调整价值
+        final_value = result
+        values = [final_value if i % 2 == 0 else -final_value for i in range(len(values))]
         
         return states, policies, values
     
@@ -138,7 +83,7 @@ class SelfPlay:
         
         # 创建进度条
         progress_bar = tqdm(total=num_games, desc="自我对弈进度",
-                           bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
+                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
         
         # 使用进程池进行并行自我对弈
         with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS) as executor:
