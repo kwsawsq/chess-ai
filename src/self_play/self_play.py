@@ -12,7 +12,9 @@ from tqdm import tqdm
 
 from ..game.chess_game import ChessGame
 from ..mcts.mcts import MCTS
-from ..evaluation.visualizer import TrainingVisualizer
+
+# 移除直接导入
+# from ..evaluation.visualizer import TrainingVisualizer
 
 
 class SelfPlay:
@@ -30,6 +32,9 @@ class SelfPlay:
         self.config = config
         self.mcts = MCTS(model, config)
         self.logger = logging.getLogger(__name__)
+        
+        # 延迟导入以避免循环依赖
+        from ..evaluation.visualizer import TrainingVisualizer
         
         # 可视化器
         self.visualizer = TrainingVisualizer(config)

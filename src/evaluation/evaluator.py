@@ -13,7 +13,9 @@ from datetime import datetime
 
 from ..neural_network import AlphaZeroNet
 from ..game import ChessGame
-from ..self_play import SelfPlay
+
+# 移除直接导入
+# from ..self_play import SelfPlay
 
 
 class Evaluator:
@@ -73,6 +75,9 @@ class Evaluator:
         Returns:
             Dict[str, Any]: 评估结果
         """
+        # 延迟导入以避免循环依赖
+        from ..self_play import SelfPlay
+        
         self.logger.info(f"开始评估模型，对弈局数: {num_games}")
         
         # 创建游戏环境
