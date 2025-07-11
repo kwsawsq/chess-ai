@@ -25,6 +25,13 @@ class Config:
         self.NUM_RESIDUAL_BLOCKS = 20  # 减小残差块数量
         self.DROPOUT_RATE = 0.3
         
+        # 神经网络输入输出配置
+        self.IN_CHANNELS = 119  # 输入通道数 (14个棋子类型 * 2个颜色 * 8个历史步骤 + 7个额外特征)
+        self.BOARD_SIZE = 8  # 棋盘大小
+        self.ACTION_SIZE = 4672  # 可能的行动数量 (64 * 73 - 1)
+        self.VALUE_HEAD_HIDDEN = 256  # 价值头隐藏层大小
+        self.POLICY_HEAD_HIDDEN = 256  # 策略头隐藏层大小
+        
         # MCTS配置
         self.NUM_SIMULATIONS = 100  # 减少模拟次数以加快每步决策
         self.CPUCT = 1.0
@@ -37,6 +44,13 @@ class Config:
         self.LEARNING_RATE = 0.001
         self.WEIGHT_DECAY = 1e-4
         self.MAX_GRAD_NORM = 1.0
+        
+        # 学习率调度
+        self.LR_MILESTONES = [100, 200, 300]  # 在这些epoch时降低学习率
+        self.LR_GAMMA = 0.1  # 学习率衰减因子
+        
+        # 训练迭代次数
+        self.NUM_ITERATIONS = 1000  # 总训练迭代次数
         
         # 自我对弈配置
         self.NUM_SELF_PLAY_GAMES = 100
