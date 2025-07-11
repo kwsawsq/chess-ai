@@ -37,10 +37,10 @@ class Config:
         self.POLICY_HEAD_HIDDEN = 256  # 策略头隐藏层大小
         
         # MCTS配置
-        self.NUM_SIMULATIONS = 100  # 减少模拟次数以加快每步决策
-        self.CPUCT = 1.0
-        self.DIRICHLET_ALPHA = 0.3
-        self.DIRICHLET_EPSILON = 0.25
+        self.NUM_MCTS_SIMS = 100  # MCTS模拟次数
+        self.C_PUCT = 1.0  # PUCT常数
+        self.DIRICHLET_ALPHA = 0.3  # 狄利克雷噪声参数alpha
+        self.DIRICHLET_EPSILON = 0.25  # 狄利克雷噪声权重
         
         # 训练配置
         self.BATCH_SIZE = 512  # 增大批量大小
