@@ -357,3 +357,217 @@ class ResultVisualizer:
     def __repr__(self) -> str:
         """调试表示"""
         return self.__str__() 
+
+"""
+训练过程可视化模块
+"""
+
+import chess
+import chess.svg
+import matplotlib.pyplot as plt
+import numpy as np
+from IPython.display import SVG, display, clear_output
+import seaborn as sns
+from typing import List, Tuple, Dict, Optional
+import time
+import os
+from datetime import datetime
+
+
+class TrainingVisualizer:
+    """训练过程可视化器"""
+    
+    def __init__(self, config):
+        """
+        初始化可视化器
+        
+        Args:
+            config: 配置对象
+        """
+        self.config = config
+        self.game_count = 0
+        self.move_count = 0
+        
+        # 创建可视化输出目录
+        self.vis_dir = os.path.join(config.LOG_DIR, 'visualizations')
+        os.makedirs(self.vis_dir, exist_ok=True)
+        
+        # 创建当前训练会话目录
+        self.session_dir = os.path.join(
+            self.vis_dir,
+            datetime.now().strftime('%Y%m%d_%H%M%S')
+        )
+        os.makedirs(self.session_dir, exist_ok=True)
+        
+        # 初始化matplotlib
+        plt.style.use('seaborn')
+    
+    def visualize_board(self,
+                       board: chess.Board,
+                       policy: np.ndarray,
+                       value: float,
+                       move_probs: Dict[str, float],
+                       save: bool = True) -> None:
+        """
+        可视化当前棋局状态
+        
+        Args:
+            board: 棋盘对象
+            policy: 策略分布
+            value: 局面评估值
+            move_probs: 移动概率字典
+            save: 是否保存图像
+        """
+        # 创建图形
+        fig = plt.figure(figsize=(15, 8))
+        
+        # 1. 棋盘状态
+        ax1 = plt.subplot(121)
+        svg = chess.svg.board(board, size=400)
+        with open(os.path.join(self.session_dir, 'temp.svg'), 'w') as f:
+            f.write(svg)
+        img = plt.imread(os.path.join(self.session_dir, 'temp.svg'))
+        ax1.imshow(img)
+        ax1.axis('off')
+        
+        # 2. 移动概率分布
+        ax2 = plt.subplot(122)
+        moves = list(move_probs.keys())
+        probs = list(move_probs.values())
+        
+        # 只显示概率最高的前10个移动
+        if len(moves) > 10:
+            indices = np.argsort(probs)[-10:]
+            moves = [moves[i] for i in indices]
+            probs = [probs[i] for i in indices]
+        
+        y_pos = np.arange(len(moves))
+        ax2.barh(y_pos, probs)
+        ax2.set_yticks(y_pos)
+        ax2.set_yticklabels(moves)
+        ax2.invert_yaxis()
+        ax2.set_xlabel('概率')
+        ax2.set_title(f'局面评估: {value:.2f}')
+        
+        plt.tight_layout()
+        
+        if save:
+            # 保存图像
+            game_dir = os.path.join(self.session_dir, f'game_{self.game_count}')
+            os.makedirs(game_dir, exist_ok=True)
+            plt.savefig(os.path.join(game_dir, f'move_{self.move_count}.png'))
+            self.move_count += 1
+        
+        plt.close()
+    
+    def new_game(self) -> None:
+        """开始新的游戏"""
+        self.game_count += 1
+        self.move_count = 0
+    
+    def plot_training_stats(self,
+                          stats: Dict[str, List[float]],
+                          save: bool = True) -> None:
+        """
+        绘制训练统计信息
+        
+        Args:
+            stats: 训练统计数据
+            save: 是否保存图像
+        """
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        
+        # 1. 总损失
+        ax = axes[0, 0]
+        ax.plot(stats['total_loss'])
+        ax.set_title('总损失')
+        ax.set_xlabel('迭代次数')
+        ax.set_ylabel('损失值')
+        
+        # 2. 策略损失
+        ax = axes[0, 1]
+        ax.plot(stats['policy_loss'])
+        ax.set_title('策略损失')
+        ax.set_xlabel('迭代次数')
+        ax.set_ylabel('损失值')
+        
+        # 3. 价值损失
+        ax = axes[1, 0]
+        ax.plot(stats['value_loss'])
+        ax.set_title('价值损失')
+        ax.set_xlabel('迭代次数')
+        ax.set_ylabel('损失值')
+        
+        # 4. 学习率
+        ax = axes[1, 1]
+        ax.plot(stats['learning_rate'])
+        ax.set_title('学习率')
+        ax.set_xlabel('迭代次数')
+        ax.set_ylabel('学习率')
+        
+        plt.tight_layout()
+        
+        if save:
+            plt.savefig(os.path.join(self.session_dir, 'training_stats.png'))
+        
+        plt.close()
+    
+    def plot_game_stats(self,
+                       game_lengths: List[int],
+                       win_rates: List[float],
+                       save: bool = True) -> None:
+        """
+        绘制游戏统计信息
+        
+        Args:
+            game_lengths: 游戏长度列表
+            win_rates: 胜率列表
+            save: 是否保存图像
+        """
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+        
+        # 1. 游戏长度分布
+        ax1.hist(game_lengths, bins=20)
+        ax1.set_title('游戏长度分布')
+        ax1.set_xlabel('步数')
+        ax1.set_ylabel('频率')
+        
+        # 2. 胜率变化
+        ax2.plot(win_rates)
+        ax2.set_title('胜率变化')
+        ax2.set_xlabel('游戏编号')
+        ax2.set_ylabel('胜率')
+        ax2.set_ylim(0, 1)
+        
+        plt.tight_layout()
+        
+        if save:
+            plt.savefig(os.path.join(self.session_dir, 'game_stats.png'))
+        
+        plt.close()
+    
+    def save_game_pgn(self, game_moves: List[str], result: str) -> None:
+        """
+        保存游戏PGN记录
+        
+        Args:
+            game_moves: 游戏移动列表
+            result: 游戏结果
+        """
+        game_dir = os.path.join(self.session_dir, f'game_{self.game_count}')
+        os.makedirs(game_dir, exist_ok=True)
+        
+        pgn = f'[Event "Self-play Game {self.game_count}"]\n'
+        pgn += f'[Date "{datetime.now().strftime("%Y.%m.%d")}"]\n'
+        pgn += f'[Result "{result}"]\n\n'
+        
+        for i, move in enumerate(game_moves):
+            if i % 2 == 0:
+                pgn += f'{i//2 + 1}. {move} '
+            else:
+                pgn += f'{move} '
+        
+        pgn += result
+        
+        with open(os.path.join(game_dir, 'game.pgn'), 'w') as f:
+            f.write(pgn) 
