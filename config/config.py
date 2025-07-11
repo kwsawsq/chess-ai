@@ -17,8 +17,12 @@ class Config:
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR]:
             os.makedirs(dir_path, exist_ok=True)
         
-        # 设备配置
-        self.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # GPU配置
+        self.USE_GPU = torch.cuda.is_available()  # 是否使用GPU
+        self.DEVICE = 'cuda' if self.USE_GPU else 'cpu'
+        self.GPU_ID = 0  # 使用的GPU ID
+        if self.USE_GPU:
+            torch.cuda.set_device(self.GPU_ID)
         
         # 神经网络配置
         self.NUM_CHANNELS = 256  # 减小通道数以加快训练
@@ -86,7 +90,7 @@ class Config:
         self.PREFETCH_FACTOR = 2  # 预取因子
         
         # CUDA优化
-        if torch.cuda.is_available():
+        if self.USE_GPU:
             self.CUDA_LAUNCH_BLOCKING = "0"  # 禁用CUDA启动阻塞
             torch.backends.cudnn.benchmark = True  # 启用cuDNN基准测试
             torch.backends.cudnn.deterministic = False  # 关闭确定性模式以提高性能
