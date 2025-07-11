@@ -65,7 +65,7 @@ class ResultVisualizer:
         <head>
             <title>Chess Game Visualization</title>
             <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
+                body { margin: 20px; }
                 .move-list { margin: 20px 0; }
                 .board-container { margin: 20px 0; }
                 .game-info { margin: 20px 0; }
