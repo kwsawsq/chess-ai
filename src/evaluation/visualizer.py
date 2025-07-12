@@ -14,7 +14,7 @@ from tqdm import tqdm
 import chess
 import chess.svg
 import os
-from IPython.display import display, HTML, SVG
+#from IPython.display import display, HTML, SVG
 import time
 import json
 
@@ -505,7 +505,7 @@ import chess
 import chess.svg
 import matplotlib.pyplot as plt
 import numpy as np
-from IPython.display import SVG, display, clear_output
+#from IPython.display import SVG, display, clear_output
 import seaborn as sns
 from typing import List, Tuple, Dict, Optional
 import time
