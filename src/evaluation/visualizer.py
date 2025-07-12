@@ -66,7 +66,7 @@ class ResultVisualizer:
     <title>Chess Game Visualization</title>
     <style>
         
-        .current-move { background-color: #e6f3ff; }
+        
     </style>
 </head>
 <body>
