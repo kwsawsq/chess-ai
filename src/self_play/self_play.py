@@ -53,7 +53,19 @@ class SelfPlay:
         
         while not game.is_over():
             state = game.get_state()
-            policy, value = self.model.predict(state)
+            
+            # 调试：检查state格式
+            if state is None:
+                print("Error: state is None")
+                break
+            print("State shape:", state.shape if hasattr(state, 'shape') else "No shape")
+            print("State content (min/max):", np.min(state), np.max(state))
+
+            try:
+                policy, value = self.model.predict(state)
+            except Exception as e:
+                print(f"预测出错: {e}")
+                break  # 或 continue 跳过当前步骤
             
             # 记录当前状态
             states.append(state)
@@ -67,6 +79,9 @@ class SelfPlay:
             # 执行移动
             game.make_move(move)
         
+        if not moves:  # 如果游戏未完成
+            return [], [], []
+
         # 获取游戏结果
         result = game.get_result()
         result_str = "1-0" if result == 1 else "0-1" if result == -1 else "1/2-1/2"
