@@ -58,9 +58,7 @@ class SelfPlay:
             if state is None:
                 print("Error: state is None")
                 break
-            print("State shape:", state.shape if hasattr(state, 'shape') else "No shape")
-            print("State content (min/max):", np.min(state), np.max(state))
-
+                
             try:
                 policy, value = self.model.predict(state)
             except Exception as e:
