@@ -25,16 +25,16 @@ class Config:
             torch.cuda.set_device(self.GPU_ID)
         
         # 神经网络配置 - 保持大模型以充分利用GPU
-        self.NUM_CHANNELS = 2048
-        self.NUM_RESIDUAL_BLOCKS = 40
+        self.NUM_CHANNELS = 256
+        self.NUM_RESIDUAL_BLOCKS = 8
         self.DROPOUT_RATE = 0.3
         
         # 神经网络输入输出配置
         self.IN_CHANNELS = 20
         self.BOARD_SIZE = 8
         self.ACTION_SIZE = 4096
-        self.VALUE_HEAD_HIDDEN = 2048
-        self.POLICY_HEAD_HIDDEN = 2048
+        self.VALUE_HEAD_HIDDEN = 256
+        self.POLICY_HEAD_HIDDEN = 256
         
         # MCTS配置 - 减少单次搜索时间
         self.NUM_MCTS_SIMS = 800  # 减少模拟次数以加快每步决策
@@ -43,7 +43,7 @@ class Config:
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 2048  # 减小批量以加快处理
+        self.BATCH_SIZE = 128  # 减小批量以加快处理
         self.NUM_EPOCHS = 10  # 减少训练轮次
         self.LEARNING_RATE = 0.002
         self.WEIGHT_DECAY = 1e-4
@@ -58,8 +58,8 @@ class Config:
         
         # 自我对弈配置 - 优化并行度
         self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数以加快一轮完成
-        self.PARALLEL_GAMES = 32  # 保持适度并行
-        self.NUM_WORKERS = 14
+        self.PARALLEL_GAMES = 4  # 保持适度并行
+        self.NUM_WORKERS = 2
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
