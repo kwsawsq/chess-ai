@@ -171,7 +171,7 @@ class Trainer:
             
             # 使用混合精度训练
             if self.config.USE_AMP:
-                with autocast():
+                with autocast(device_type='cuda'):
                     # 前向传播
                     policy_out, value_out = self.model(batch_states)
                     
