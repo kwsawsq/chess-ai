@@ -60,20 +60,16 @@ class ResultVisualizer:
         
         # 生成HTML内容
         html_content = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Chess Game Visualization</title>
-            <style>
-                body { margin: 20px; }
-                .move-list { margin: 20px 0; }
-                .board-container { margin: 20px 0; }
-                .game-info { margin: 20px 0; }
-                .move { display: inline-block; margin: 5px 10px; }
-                .current-move { background-color: #e6f3ff; }
-            </style>
-        </head>
-        <body>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chess Game Visualization</title>
+    <style>
+        .move { display: inline-block; }
+        .current-move { background-color: #e6f3ff; }
+    </style>
+</head>
+<body>
             <h1>对局回放</h1>
             <div class="game-info">
                 <p>对局时间: {timestamp}</p>
