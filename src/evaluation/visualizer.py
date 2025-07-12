@@ -150,7 +150,7 @@ class ResultVisualizer:
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 html_content = f.read()
-            display(HTML(html_content))
+            #display(HTML(html_content))
         except Exception as e:
             print("注意：此环境不支持直接显示HTML，请使用浏览器打开上述文件。")
     
