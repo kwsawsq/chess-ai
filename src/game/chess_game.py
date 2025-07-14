@@ -21,6 +21,15 @@ class ChessGame:
         self.config = config
         self.move_history = []  # 记录所有移动
     
+    def get_current_player(self) -> int:
+        """
+        获取当前玩家.
+
+        Returns:
+            int: 1 for White, -1 for Black.
+        """
+        return 1 if self.board.board.turn == chess.WHITE else -1
+
     def get_state(self) -> np.ndarray:
         """
         获取当前状态
