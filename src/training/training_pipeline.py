@@ -91,41 +91,51 @@ class TrainingPipeline:
         start_time = time.time()
         
         try:
-            for iteration in range(num_iterations):
+            for iteration in range(self.stats['iteration'], num_iterations):
                 self.stats['iteration'] = iteration + 1
                 self.logger.info(f"开始训练迭代 {iteration + 1}/{num_iterations}")
-                
+
                 # 1. 自我对弈生成数据
                 self.logger.info("开始自我对弈...")
                 new_examples = self.self_play.generate_training_data(
-                    num_games=self.config.SELF_PLAY_GAMES,
-                    verbose=True,
-                    parallel=True
+                    num_games=self.config.NUM_SELF_PLAY_GAMES
                 )
-                
-                # 更新训练数据
-                self.training_data.extend(new_examples)
-                if len(self.training_data) > self.config.MAX_TRAINING_DATA_SIZE:
-                    # 保留最新的数据
-                    self.training_data = self.training_data[-self.config.MAX_TRAINING_DATA_SIZE:]
-                
-                self.stats['total_games'] += self.config.SELF_PLAY_GAMES
-                
+
+                if new_examples:
+                    self.training_data.extend(new_examples)
+                    
+                    if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
+                        self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
+                    
+                    self.stats['total_games'] += self.config.NUM_SELF_PLAY_GAMES
+                    self.logger.info(f"生成了 {len(new_examples)} 个新样本, 当前总样本数: {len(self.training_data)}")
+                else:
+                    self.logger.warning("本次自我对弈没有生成任何有效数据，跳过本轮训练。")
+                    continue
+
+                if len(self.training_data) < self.config.MIN_REPLAY_SIZE:
+                    self.logger.info(f"当前样本数 {len(self.training_data)} 不足 {self.config.MIN_REPLAY_SIZE}, 跳过本轮训练。")
+                    continue
+
                 # 2. 训练神经网络
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
-                self.training_history.append(train_stats)
-                
+                if train_stats:
+                    self.training_history.append(train_stats)
+                else:
+                    self.logger.warning("网络训练未返回统计数据。")
+
                 # 3. 评估新模型
                 self.logger.info("开始模型评估...")
                 evaluation_stats = self._evaluate_model()
-                
+
                 # 4. 保存检查点
-                self._save_checkpoint(iteration + 1, evaluation_stats)
-                
+                if (iteration + 1) % self.config.SAVE_INTERVAL == 0:
+                    self._save_checkpoint(iteration + 1, evaluation_stats)
+
                 # 记录本次迭代信息
                 self._log_iteration_stats(iteration + 1, train_stats, evaluation_stats)
-                
+
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")
         except Exception as e:
@@ -227,8 +237,13 @@ class TrainingPipeline:
             self.config.DATA_DIR,
             'final_training_data.npz'
         )
-        self.self_play.save_training_data(data_path)
-        self.logger.info(f"保存训练数据到: {data_path}")
+        
+        if self.training_data:
+            states, policies, values = zip(*self.training_data)
+            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+            self.logger.info(f"保存训练数据到: {data_path}")
+        else:
+            self.logger.warning("没有训练数据可供保存。")
     
     def _log_iteration_stats(self,
                            iteration: int,
