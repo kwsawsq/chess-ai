@@ -207,7 +207,7 @@ class TrainingPipeline:
             'value_loss': np.mean(all_value_loss),
             'total_loss': np.mean(all_total_loss)
         }
-    
+
     def _evaluate_model(self) -> Dict[str, float]:
         """
         评估当前模型
@@ -215,21 +215,35 @@ class TrainingPipeline:
         Returns:
             Dict[str, float]: 评估统计信息
         """
-        # 创建评估用的网络副本
+        self.logger.info("开始模型评估...")
+        
+        # 创建一个“旧”模型用于对比
         previous_net = AlphaZeroNet(self.config)
+        # 简单地从当前模型复制权重作为“旧”模型
+        # 在实际应用中, 你可能需要加载上一个最好的模型
         previous_net.load_state_dict(self.current_net.state_dict())
         
-        # 评估
-        eval_stats = self.self_play.evaluate_against_previous(
-            previous_net,
-            num_games=self.config.EVAL_GAMES,
-            verbose=True
+        # 使用评估器进行评估
+        win_rate, draw_rate, loss_rate = self.evaluator.evaluate(
+            self.current_net, 
+            previous_net, 
+            num_games=self.config.EVAL_EPISODES
         )
         
-        # 更新最佳胜率
-        if eval_stats['win_rate'] > self.stats['best_win_rate']:
-            self.stats['best_win_rate'] = eval_stats['win_rate']
+        self.logger.info(f"评估结果 - 胜率: {win_rate:.2%}, 平局率: {draw_rate:.2%}, 败率: {loss_rate:.2%}")
         
+        eval_stats = {
+            'win_rate': win_rate,
+            'draw_rate': draw_rate,
+            'loss_rate': loss_rate
+        }
+        
+        # 更新最佳胜率
+        if eval_stats['win_rate'] > self.stats.get('best_win_rate', 0.0):
+            self.stats['best_win_rate'] = eval_stats['win_rate']
+            self.logger.info(f"新高胜率! 保存为最佳模型。")
+            self.current_net.save(os.path.join(self.config.MODEL_DIR, 'best_model.pth'))
+
         return eval_stats
     
     def _save_checkpoint(self, iteration: int, eval_stats: Dict[str, float]):

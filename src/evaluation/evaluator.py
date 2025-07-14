@@ -10,9 +10,11 @@ from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+from tqdm import tqdm
 
 from ..neural_network import AlphaZeroNet
 from ..game import ChessGame
+from ..mcts import MCTS
 
 # 移除直接导入
 # from ..self_play import SelfPlay
@@ -43,6 +45,80 @@ class Evaluator:
         
         # 评估历史
         self.history: List[Dict[str, Any]] = []
+
+    def _play_one_game(self, model1: AlphaZeroNet, model2: AlphaZeroNet, start_player: int) -> int:
+        """
+        进行一局对弈
+        
+        Args:
+            model1: 模型1 (先手)
+            model2: 模型2 (后手)
+            start_player: 开始玩家 (1 或 -1)
+
+        Returns:
+            int: 游戏结果 (1, 0, -1)
+        """
+        game = ChessGame(self.config)
+        
+        mcts1 = MCTS(model1, self.config)
+        mcts2 = MCTS(model2, self.config)
+        
+        models = {1: mcts1, -1: mcts2}
+        if start_player == -1:
+            models = {-1: mcts1, 1: mcts2}
+
+        while not game.is_over():
+            player = game.get_current_player()
+            mcts = models[player]
+            
+            policy, _ = mcts.search(game.board)
+            move = game.select_move(policy)
+            game.make_move(move)
+
+        return game.get_result()
+
+    def evaluate(self, 
+                 model: AlphaZeroNet, 
+                 benchmark_model: AlphaZeroNet, 
+                 num_games: int = 10) -> Tuple[float, float, float]:
+        """
+        评估模型性能
+
+        Args:
+            model: 待评估的新模型
+            benchmark_model: 基准模型
+            num_games: 评估游戏局数
+            
+        Returns:
+            Tuple[float, float, float]: (胜率, 平局率, 败率)
+        """
+        wins, draws, losses = 0, 0, 0
+        
+        progress_bar = tqdm(range(num_games), desc="模型评估")
+        
+        for i in progress_bar:
+            # 交替先后手
+            start_player = 1 if i % 2 == 0 else -1
+            if start_player == 1:
+                result = self._play_one_game(model, benchmark_model, start_player)
+            else:
+                result = self._play_one_game(benchmark_model, model, start_player)
+
+            if (start_player == 1 and result == 1) or (start_player == -1 and result == -1):
+                wins += 1
+            elif result == 0:
+                draws += 1
+            else:
+                losses += 1
+                
+            progress_bar.set_postfix({
+                'wins': wins,
+                'draws': draws,
+                'losses': losses
+            })
+
+        total = wins + draws + losses
+        return wins / total, draws / total, losses / total
     
     def _setup_logging(self):
         """设置日志"""
@@ -81,28 +157,24 @@ class Evaluator:
         self.logger.info(f"开始评估模型，对弈局数: {num_games}")
         
         # 创建游戏环境
-        game = ChessGame()
+        game = ChessGame(self.config)
         
         # 如果没有基准模型，创建一个新的随机初始化模型
         if benchmark_model is None:
             benchmark_model = AlphaZeroNet(self.config)
         
-        # 创建自我对弈环境
-        self_play = SelfPlay(model, self.config, game)
-        
-        # 进行评估对弈
-        eval_stats = self_play.evaluate_against_previous(
-            benchmark_model,
-            num_games=num_games,
-            verbose=True
-        )
-        
+        win_rate, draw_rate, loss_rate = self.evaluate(model, benchmark_model, num_games)
+
         # 记录评估结果
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         eval_result = {
             'timestamp': timestamp,
             'num_games': num_games,
-            'stats': eval_stats,
+            'stats': {
+                'win_rate': win_rate,
+                'draw_rate': draw_rate,
+                'loss_rate': loss_rate
+            },
             'model_config': self.config
         }
         
