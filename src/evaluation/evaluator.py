@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from ..neural_network import AlphaZeroNet
 from ..game import ChessGame
@@ -75,7 +76,16 @@ class Evaluator:
             move = game.select_move(policy)
             game.make_move(move)
 
-        return game.get_result()
+        # 返回游戏结果, 并带上谁是新模型的信息 (由start_player决定)
+        # 如果新模型是先手(1), 且赢了(1), 结果是1
+        # 如果新模型是后手(-1), 且赢了(-1), 结果是1
+        # 其他情况为输或平
+        if result == start_player:
+            return 1 # 新模型赢
+        elif result == 0:
+            return 0 # 平局
+        else:
+            return -1 # 新模型输
 
     def evaluate(self, 
                  model: AlphaZeroNet, 
@@ -90,34 +100,46 @@ class Evaluator:
             num_games: 评估游戏局数
             
         Returns:
-            Tuple[float, float, float]: (胜率, 平局率, 败率)
+            Tuple[float, float, float]: (新模型胜率, 平局率, 新模型败率)
         """
         wins, draws, losses = 0, 0, 0
         
-        progress_bar = tqdm(range(num_games), desc="模型评估")
-        
-        for i in progress_bar:
-            # 交替先后手
-            start_player = 1 if i % 2 == 0 else -1
-            if start_player == 1:
-                result = self._play_one_game(model, benchmark_model, start_player)
-            else:
-                result = self._play_one_game(benchmark_model, model, start_player)
+        # 使用进程池并行执行游戏
+        with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS) as executor:
+            futures = []
+            for i in range(num_games):
+                # 交替先后手
+                if i % 2 == 0:
+                    # 新模型执白
+                    futures.append(executor.submit(self._play_one_game, model, benchmark_model, 1))
+                else:
+                    # 新模型执黑
+                    futures.append(executor.submit(self._play_one_game, benchmark_model, model, -1))
 
-            if (start_player == 1 and result == 1) or (start_player == -1 and result == -1):
-                wins += 1
-            elif result == 0:
-                draws += 1
-            else:
-                losses += 1
-                
-            progress_bar.set_postfix({
-                'wins': wins,
-                'draws': draws,
-                'losses': losses
-            })
+            progress_bar = tqdm(as_completed(futures), total=num_games, desc="模型评估")
+
+            for future in progress_bar:
+                try:
+                    result = future.result()
+                    if result == 1:
+                        wins += 1
+                    elif result == 0:
+                        draws += 1
+                    else:
+                        losses += 1
+
+                    progress_bar.set_postfix({
+                        'wins': wins,
+                        'draws': draws,
+                        'losses': losses
+                    })
+                except Exception as e:
+                    self.logger.error(f"评估子进程出错: {e}", exc_info=True)
 
         total = wins + draws + losses
+        if total == 0:
+            return 0.0, 0.0, 0.0
+            
         return wins / total, draws / total, losses / total
     
     def _setup_logging(self):
