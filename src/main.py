@@ -7,7 +7,7 @@ import argparse
 import logging
 from datetime import datetime
 
-from config.config import AlphaZeroConfig
+from config.config import Config
 from .game import ChessGame
 from .neural_network import AlphaZeroNet
 from .training import TrainingPipeline
@@ -227,7 +227,7 @@ def main():
     args = parser.parse_args()
     
     # 加载配置
-    config = AlphaZeroConfig()
+    config = Config()
     
     # 设置日志
     logger = setup_logging(config)
