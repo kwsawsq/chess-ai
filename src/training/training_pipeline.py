@@ -42,7 +42,7 @@ class TrainingPipeline:
         self.current_net = AlphaZeroNet(config)
         
         # 创建自我对弈模块
-        self.self_play = SelfPlay(self.current_net, config, self.game)
+        self.self_play = SelfPlay(self.current_net, config)
         
         # 创建评估器
         self.evaluator = Evaluator(config)
