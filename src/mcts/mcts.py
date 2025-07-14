@@ -7,7 +7,7 @@ import time
 from typing import Optional, Tuple, Dict, Any, List
 import logging
 from .node import MCTSNode
-from ..game import ChessBoard, ChessGame
+from ..game import ChessBoard
 from ..neural_network import AlphaZeroNet
 
 
@@ -19,7 +19,7 @@ class MCTS:
     def __init__(self,
                  neural_net: AlphaZeroNet,
                  config,
-                 game: Optional[ChessGame] = None):
+                 game: Optional[ChessBoard] = None):
         """
         初始化MCTS
         
@@ -30,7 +30,7 @@ class MCTS:
         """
         self.neural_net = neural_net
         self.config = config
-        self.game = game or ChessGame()
+        self.game = game or ChessBoard()
         
         # MCTS参数
         self.num_simulations = config.NUM_MCTS_SIMS
