@@ -36,7 +36,7 @@ class TrainingPipeline:
         self.config = config
         
         # 创建游戏引擎
-        self.game = ChessGame()
+        self.game = ChessGame(config)
         
         # 创建神经网络
         self.current_net = AlphaZeroNet(config)
