@@ -6,6 +6,7 @@
 import os
 import json
 import logging
+import copy
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
@@ -61,8 +62,12 @@ class Evaluator:
         """
         game = ChessGame(self.config)
         
-        mcts1 = MCTS(model1, self.config)
-        mcts2 = MCTS(model2, self.config)
+        # 为评估创建一个更快的配置副本
+        eval_config = copy.deepcopy(self.config)
+        eval_config.NUM_MCTS_SIMS = 200  # 减少模拟次数以加快评估
+        
+        mcts1 = MCTS(model1, eval_config)
+        mcts2 = MCTS(model2, eval_config)
         
         models = {1: mcts1, -1: mcts2}
         if start_player == -1:
