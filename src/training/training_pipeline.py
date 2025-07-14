@@ -165,11 +165,14 @@ class TrainingPipeline:
             policy_targets,
             value_targets,
             batch_size=self.config.BATCH_SIZE,
-            epochs=self.config.EPOCHS_PER_ITERATION
+            epochs=self.config.NUM_EPOCHS
         )
         
+        # 提取并记录训练统计数据
+        policy_loss = history.history.get('policy_loss', [0])
+        
         return {
-            'policy_loss': float(np.mean(history['policy_loss'])),
+            'policy_loss': float(np.mean(policy_loss)),
             'value_loss': float(np.mean(history['value_loss'])),
             'total_loss': float(np.mean(history['total_loss']))
         }
