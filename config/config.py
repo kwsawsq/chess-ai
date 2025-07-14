@@ -37,7 +37,8 @@ class Config:
         self.POLICY_HEAD_HIDDEN = 256
         
         # MCTS配置 - 减少单次搜索时间
-        self.NUM_MCTS_SIMS = 800  # 减少模拟次数以加快每步决策
+        self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
+        self.NUM_MCTS_SIMS_EVAL = 200  # 评估时的模拟次数（更快）
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25

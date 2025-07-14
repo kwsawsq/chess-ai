@@ -6,7 +6,6 @@
 import os
 import json
 import logging
-import copy
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
@@ -62,9 +61,14 @@ class Evaluator:
         """
         game = ChessGame(self.config)
         
-        # 为评估创建一个更快的配置副本
-        eval_config = copy.deepcopy(self.config)
-        eval_config.NUM_MCTS_SIMS = 200  # 减少模拟次数以加快评估
+        # 创建用于评估的快速配置
+        eval_config = type('', (), {})()
+        for attr in dir(self.config):
+            if not attr.startswith('_'):
+                setattr(eval_config, attr, getattr(self.config, attr))
+        
+        # 使用更少的MCTS搜索次数来加快评估
+        eval_config.NUM_MCTS_SIMS = getattr(self.config, 'NUM_MCTS_SIMS_EVAL', 200)
         
         mcts1 = MCTS(model1, eval_config)
         mcts2 = MCTS(model2, eval_config)

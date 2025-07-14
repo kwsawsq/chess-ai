@@ -235,7 +235,9 @@ class TrainingPipeline:
         eval_stats = {
             'win_rate': win_rate,
             'draw_rate': draw_rate,
-            'loss_rate': loss_rate
+            'loss_rate': loss_rate,
+            'num_games': self.config.EVAL_EPISODES,
+            'avg_game_length': 50.0  # 估计的平均游戏长度
         }
         
         # 更新最佳胜率
