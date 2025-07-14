@@ -32,127 +32,111 @@ class ResultVisualizer:
         plt.style.use(style)
         sns.set_palette("husl")
         
-        # 创建HTML输出目录
-        self.html_dir = os.path.join('logs', 'html_output')
-        os.makedirs(self.html_dir, exist_ok=True)
+        # 创建PGN输出目录
+        self.pgn_dir = os.path.join('logs', 'pgn_output')
+        os.makedirs(self.pgn_dir, exist_ok=True)
         
         # 初始化游戏计数器
         self.game_counter = 0
     
-    def create_game_html(self, moves: List[str], result: str) -> str:
+    def create_pgn_file(self, moves: List[str], result: str) -> str:
         """
-        创建游戏HTML页面
+        创建PGN棋谱文件
         
         Args:
-            moves: 移动列表
-            result: 游戏结果
+            moves: 移动列表 (UCI格式，如 'e2e4')
+            result: 游戏结果 ('1-0', '0-1', '1/2-1/2')
             
         Returns:
-            str: HTML文件路径
+            str: PGN文件路径
         """
         self.game_counter += 1
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f'game_{self.game_counter}_{timestamp}.html'
-        filepath = os.path.join(self.html_dir, filename)
+        filename = f'game_{self.game_counter}_{timestamp}.pgn'
+        filepath = os.path.join(self.pgn_dir, filename)
         
-        # 创建棋盘
+        # 创建棋盘用于UCI到SAN转换
         board = chess.Board()
         
-        # 生成HTML内容
-        html_content = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Chess Game Visualization</title>
-    <style>
+        # 生成PGN头信息
+        pgn_content = [
+            '[Event "AlphaZero Self-play"]',
+            f'[Site "Chess-AI"]',
+            f'[Date "{time.strftime("%Y.%m.%d")}"]',
+            f'[Round "{self.game_counter}"]',
+            '[White "AlphaZero"]',
+            '[Black "AlphaZero"]',
+            f'[Result "{result}"]',
+            ''
+        ]
         
-        
-    </style>
-</head>
-<body>
-            <h1>对局回放</h1>
-            <div class="game-info">
-                <p>对局时间: {timestamp}</p>
-                <p>对局结果: {result}</p>
-            </div>
-            <div class="move-list">
-                <h2>移动列表</h2>
-        """.format(timestamp=timestamp, result=result)
-        
-        # 添加移动列表
-        for i, move in enumerate(moves):
-            if i % 2 == 0:
-                html_content += f'<div class="move">{i//2 + 1}. {move}'
-            else:
-                html_content += f' {move}</div>'
-        
-        # 如果最后一个移动是白方，添加结束div
-        if len(moves) % 2 == 1:
-            html_content += '</div>'
-            
-        html_content += """
-            </div>
-            <div class="board-container">
-                <h2>最终局面</h2>
-        """
-        
-        # 执行所有移动
-        for move in moves:
+        # 转换移动并添加到PGN
+        move_text = ""
+        for i, move_uci in enumerate(moves):
             try:
-                board.push_san(move)
+                # 将UCI格式转换为Move对象
+                move = chess.Move.from_uci(move_uci)
+                
+                # 检查移动是否合法
+                if move in board.legal_moves:
+                    # 获取SAN表示
+                    san_move = board.san(move)
+                    
+                    # 添加到PGN
+                    if i % 2 == 0:  # 白方
+                        move_number = i // 2 + 1
+                        move_text += f"{move_number}. {san_move} "
+                    else:  # 黑方
+                        move_text += f"{san_move} "
+                    
+                    # 执行移动
+                    board.push(move)
+                else:
+                    print(f"警告: 非法移动 {move_uci} 在位置 {board.fen()}")
+                    continue
             except ValueError as e:
-                print(f"无效的移动: {move}")
+                print(f"无效的移动: {move_uci}, 错误: {e}")
                 continue
         
-        # 添加最终局面的SVG
-        svg = chess.svg.board(board, size=400)
-        html_content += svg
+        # 添加结果
+        move_text += result
         
-        html_content += """
-            </div>
-        </body>
-        </html>
-        """
+        # 合并PGN内容
+        pgn_content.append(move_text)
+        pgn_content.append("")  # 添加最后的空行
         
-        # 保存HTML文件
+        # 保存PGN文件
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(html_content)
+            f.write('\n'.join(pgn_content))
         
-        # 同时创建一个JSON文件保存游戏数据，方便后续分析
-        json_filepath = filepath.replace('.html', '.json')
-        game_data = {
-            'moves': moves,
-            'result': result,
-            'timestamp': timestamp,
-            'game_number': self.game_counter
-        }
-        with open(json_filepath, 'w', encoding='utf-8') as f:
-            json.dump(game_data, f, ensure_ascii=False, indent=2)
-        
-        print(f"\n游戏记录已保存到: {filepath}")
+        print(f"\n游戏PGN已保存到: {filepath}")
         return filepath
     
     def display_game(self, moves: List[str], result: str) -> None:
         """
-        显示游戏
+        显示游戏，生成PGN文件
         
         Args:
-            moves: 移动列表
+            moves: 移动列表 (UCI格式)
             result: 游戏结果
         """
-        filepath = self.create_game_html(moves, result)
+        filepath = self.create_pgn_file(moves, result)
+        print(f"\n请使用国际象棋软件打开PGN文件查看对局详情：")
+        print(f"文件路径: {os.path.abspath(filepath)}")
         
-        # 在AutoDL环境中，打印访问链接
-        print(f"\n请在浏览器中访问以下文件查看对局详情：")
-        print(f"file://{os.path.abspath(filepath)}")
+        # 打印对局基本信息
+        print(f"\n对局信息:")
+        print(f"- 总步数: {len(moves)}")
+        print(f"- 结果: {result}")
+        print(f"- 时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # 如果在Jupyter环境中，直接显示HTML
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-            #display(HTML(html_content))
-        except Exception as e:
-            print("注意：此环境不支持直接显示HTML，请使用浏览器打开上述文件。")
+        # 打印最后几步棋
+        if len(moves) > 0:
+            print("\n最后几步棋:")
+            last_moves = moves[-min(10, len(moves)):]
+            for i, move in enumerate(last_moves):
+                move_num = len(moves) - len(last_moves) + i + 1
+                print(f"步骤 {move_num}: {move}")
     
     def plot_training_history(self, 
                              history: Dict[str, List],
@@ -505,7 +489,8 @@ import chess
 import chess.svg
 import matplotlib.pyplot as plt
 import numpy as np
-#from IPython.display import SVG, display, clear_output
+# 移除IPython依赖
+# from IPython.display import SVG, display, clear_output
 import seaborn as sns
 from typing import List, Tuple, Dict, Optional
 import time

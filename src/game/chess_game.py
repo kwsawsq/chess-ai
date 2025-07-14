@@ -39,70 +39,52 @@ class ChessGame:
         根据策略选择移动
         
         Args:
-            policy: 移动概率分布
+            policy: 策略概率分布
             
         Returns:
-            str: 选择的移动（UCI格式）
+            str: 选择的移动（UCI格式，如 'e2e4'）
         """
-        # 获取所有合法移动
-        legal_moves = self.board.get_legal_moves()
+        # 获取合法移动
+        legal_moves = list(self.board.board.legal_moves)
         
-        # 将策略限制在合法移动范围内
-        legal_policy = np.zeros_like(policy)
-        for move in legal_moves:
-            move_idx = self.board.move_to_action(move)
-            if move_idx is not None and move_idx < len(policy):
-                legal_policy[move_idx] = policy[move_idx]
+        if not legal_moves:
+            return ""
+        
+        # 将合法移动转换为索引
+        legal_indices = [self.move_to_index(move) for move in legal_moves]
+        
+        # 获取合法移动的概率
+        legal_probs = policy[legal_indices]
         
         # 归一化概率
-        if legal_policy.sum() > 0:
-            legal_policy /= legal_policy.sum()
-        else:
-            # 如果没有有效的概率，使用均匀分布
-            legal_policy = np.ones_like(policy) / len(policy)
+        legal_probs = legal_probs / np.sum(legal_probs)
         
-        # 根据温度参数选择移动
-        if len(self.move_history) < self.config.TEMP_THRESHOLD:
-            # 探索阶段：使用概率选择
-            move_idx = np.random.choice(len(policy), p=legal_policy)
-        else:
-            # 利用阶段：选择最高概率的移动
-            move_idx = np.argmax(legal_policy)
+        # 根据概率选择移动
+        selected_idx = np.random.choice(len(legal_moves), p=legal_probs)
+        selected_move = legal_moves[selected_idx]
         
-        # 将索引转换为移动
-        selected_move = None
-        for move in legal_moves:
-            if self.board.move_to_action(move) == move_idx:
-                selected_move = move
-                break
-        
-        if selected_move is None:
-            # 如果没有找到对应的移动，随机选择一个合法移动
-            selected_move = np.random.choice(legal_moves)
-        
-        # 转换为UCI格式并记录
-        move_uci = selected_move.uci()
-        self.move_history.append(move_uci)
-        
-        return move_uci
+        # 返回UCI格式的移动
+        return selected_move.uci()
     
-    def make_move(self, move_uci: str) -> bool:
+    def make_move(self, move: str) -> None:
         """
         执行移动
         
         Args:
-            move_uci: UCI格式的移动
-            
-        Returns:
-            bool: 移动是否成功
+            move: 移动（UCI格式，如 'e2e4'）
         """
         try:
-            # 将UCI格式转换为Move对象并执行
-            move = chess.Move.from_uci(move_uci)
-            return self.board.make_move(move)
-        except ValueError:
-            print(f"无效的移动: {move_uci}")
-            return False
+            # 将字符串转换为Move对象
+            chess_move = chess.Move.from_uci(move)
+            
+            # 检查移动是否合法
+            if chess_move in self.board.board.legal_moves:
+                self.board.board.push(chess_move)
+            else:
+                print(f"警告: 尝试执行非法移动 {move}")
+        except ValueError as e:
+            print(f"错误: 无效的移动格式 {move}, {str(e)}")
+            return
     
     def is_over(self) -> bool:
         """
@@ -130,3 +112,36 @@ class ChessGame:
     def __repr__(self) -> str:
         """调试表示"""
         return self.__str__() 
+
+    def move_to_index(self, move: chess.Move) -> int:
+        """
+        将Move对象转换为策略数组的索引
+        
+        Args:
+            move: chess.Move对象
+            
+        Returns:
+            int: 对应的策略数组索引
+        """
+        # 获取起始和目标位置
+        from_square = move.from_square
+        to_square = move.to_square
+        
+        # 计算基本移动索引 (64 * 64 = 4096种可能移动)
+        move_idx = from_square * 64 + to_square
+        
+        # 处理升变
+        if move.promotion:
+            # 根据升变类型调整索引
+            # 升变为后(5)、车(4)、象(3)、马(2)
+            promotion_offset = {
+                chess.QUEEN: 0,
+                chess.ROOK: 1,
+                chess.BISHOP: 2,
+                chess.KNIGHT: 3
+            }
+            # 在基本移动之后添加升变偏移
+            # 注意：这里假设策略数组大小为4096，包含了所有可能的移动
+            move_idx = 4096 - 16 + promotion_offset[move.promotion]
+        
+        return move_idx 

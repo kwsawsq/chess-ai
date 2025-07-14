@@ -84,8 +84,12 @@ class SelfPlay:
         result = game.get_result()
         result_str = "1-0" if result == 1 else "0-1" if result == -1 else "1/2-1/2"
         
-        # 可视化游戏
-        self.visualizer.display_game(moves, result_str)
+        try:
+            # 可视化游戏
+            self.visualizer.display_game(moves, result_str)
+        except Exception as e:
+            print(f"可视化游戏出错: {str(e)}")
+            # 错误不影响训练数据返回
         
         # 根据最终结果调整价值
         final_value = result
@@ -111,35 +115,76 @@ class SelfPlay:
         progress_bar = tqdm(total=num_games, desc="自我对弈进度",
                           bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
         
-        # 使用进程池进行并行自我对弈
-        with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS) as executor:
-            futures = []
-            for _ in range(num_games):
-                future = executor.submit(self._play_game)
-                futures.append(future)
-            
-            # 收集结果
-            for future in futures:
+        # 如果worker数量为1，使用单进程模式避免多进程问题
+        if self.config.NUM_WORKERS == 1:
+            for i in range(num_games):
                 try:
-                    states, policies, values = future.result()
-                    all_states.extend(states)
-                    all_policies.extend(policies)
-                    all_values.extend(values)
+                    states, policies, values = self._play_game()
+                    if states:  # 只有当游戏成功完成时才添加数据
+                        all_states.extend(states)
+                        all_policies.extend(policies)
+                        all_values.extend(values)
                     progress_bar.update(1)
                     progress_bar.set_postfix({'数据量': len(all_states)})
                     sys.stdout.flush()
                 except Exception as e:
                     print(f"\n游戏生成出错: {str(e)}")
                     continue
+        else:
+            # 使用进程池进行并行自我对弈
+            try:
+                with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS) as executor:
+                    futures = []
+                    for _ in range(num_games):
+                        future = executor.submit(self._play_game)
+                        futures.append(future)
+                    
+                    # 收集结果
+                    for future in futures:
+                        try:
+                            states, policies, values = future.result(timeout=300)  # 5分钟超时
+                            if states:  # 只有当游戏成功完成时才添加数据
+                                all_states.extend(states)
+                                all_policies.extend(policies)
+                                all_values.extend(values)
+                            progress_bar.update(1)
+                            progress_bar.set_postfix({'数据量': len(all_states)})
+                            sys.stdout.flush()
+                        except Exception as e:
+                            print(f"\n游戏生成出错: {str(e)}")
+                            progress_bar.update(1)  # 仍然更新进度条
+                            continue
+            except Exception as e:
+                print(f"\n进程池执行出错: {str(e)}")
+                # 回退到单进程模式
+                for i in range(num_games - len(all_states)):
+                    try:
+                        states, policies, values = self._play_game()
+                        if states:
+                            all_states.extend(states)
+                            all_policies.extend(policies)
+                            all_values.extend(values)
+                        progress_bar.update(1)
+                        progress_bar.set_postfix({'数据量': len(all_states)})
+                        sys.stdout.flush()
+                    except Exception as e:
+                        print(f"\n游戏生成出错: {str(e)}")
+                        continue
         
         progress_bar.close()
         
         # 转换为numpy数组
-        print("\n处理生成的数据...")
-        all_states = np.array(all_states)
-        all_policies = np.array(all_policies)
-        all_values = np.array(all_values)
-        
-        print(f"生成完成! 总数据量: {len(all_states)}")
+        if all_states:
+            print("\n处理生成的数据...")
+            all_states = np.array(all_states)
+            all_policies = np.array(all_policies)
+            all_values = np.array(all_values)
+            
+            print(f"生成完成! 总数据量: {len(all_states)}")
+        else:
+            print("\n警告: 没有生成任何有效数据!")
+            all_states = np.array([])
+            all_policies = np.array([])
+            all_values = np.array([])
         
         return all_states, all_policies, all_values 

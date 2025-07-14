@@ -143,6 +143,19 @@ class Trainer:
             self.logger.warning("没有训练数据，跳过本次训练")
             return 0.0, 0.0, 0.0
             
+        # 检查输入数据是否包含NaN或inf
+        if np.any(np.isnan(states)) or np.any(np.isinf(states)):
+            self.logger.error("输入状态包含NaN或inf值")
+            return float('nan'), float('nan'), float('nan')
+        
+        if np.any(np.isnan(policies)) or np.any(np.isinf(policies)):
+            self.logger.error("输入策略包含NaN或inf值")
+            return float('nan'), float('nan'), float('nan')
+            
+        if np.any(np.isnan(values)) or np.any(np.isinf(values)):
+            self.logger.error("输入价值包含NaN或inf值")
+            return float('nan'), float('nan'), float('nan')
+            
         # 转换为tensor
         states = torch.FloatTensor(states).to(self.device)
         policies = torch.FloatTensor(policies).to(self.device)
@@ -169,72 +182,116 @@ class Trainer:
             batch_policies = policies[start_idx:end_idx]
             batch_values = values[start_idx:end_idx]
             
-            # 使用混合精度训练
-            if self.config.USE_AMP:
-                with autocast(device_type='cuda'):
-                    # 前向传播
-                    policy_out, value_out = self.model(batch_states)
+            try:
+                # 使用混合精度训练
+                if self.config.USE_AMP:
+                    with autocast(device_type='cuda'):
+                        # 前向传播
+                        policy_logits, value_out = self.model(batch_states)
+                        
+                        # 计算损失 - 修复策略损失计算
+                        policy_probs = torch.softmax(policy_logits, dim=1)
+                        policy_probs = torch.clamp(policy_probs, min=1e-8, max=1.0)  # 防止log(0)
+                        
+                        # 使用交叉熵损失
+                        policy_loss = -torch.mean(torch.sum(batch_policies * torch.log(policy_probs), dim=1))
+                        
+                        # 价值损失
+                        value_loss = torch.mean((value_out.squeeze() - batch_values) ** 2)
+                        
+                        # 总损失
+                        loss = policy_loss + value_loss
+                        
+                        # 检查损失是否为NaN
+                        if torch.isnan(loss) or torch.isinf(loss):
+                            self.logger.error(f"损失为NaN或inf: loss={loss.item()}, policy_loss={policy_loss.item()}, value_loss={value_loss.item()}")
+                            continue
                     
-                    # 计算损失
-                    policy_loss = -torch.sum(batch_policies * torch.log(policy_out + 1e-8)) / len(batch_states)
-                    value_loss = torch.mean((value_out - batch_values) ** 2)
+                    # 反向传播
+                    self.optimizer.zero_grad()
+                    self.scaler.scale(loss).backward()
+                    
+                    # 梯度裁剪
+                    self.scaler.unscale_(self.optimizer)
+                    
+                    # 检查梯度
+                    total_norm = torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.MAX_GRAD_NORM
+                    )
+                    
+                    if torch.isnan(total_norm) or torch.isinf(total_norm):
+                        self.logger.error(f"梯度范数为NaN或inf: {total_norm}")
+                        continue
+                    
+                    # 更新参数
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    # 前向传播
+                    policy_logits, value_out = self.model(batch_states)
+                    
+                    # 计算损失 - 修复策略损失计算
+                    policy_probs = torch.softmax(policy_logits, dim=1)
+                    policy_probs = torch.clamp(policy_probs, min=1e-8, max=1.0)  # 防止log(0)
+                    
+                    # 使用交叉熵损失
+                    policy_loss = -torch.mean(torch.sum(batch_policies * torch.log(policy_probs), dim=1))
+                    
+                    # 价值损失
+                    value_loss = torch.mean((value_out.squeeze() - batch_values) ** 2)
+                    
+                    # 总损失
                     loss = policy_loss + value_loss
+                    
+                    # 检查损失是否为NaN
+                    if torch.isnan(loss) or torch.isinf(loss):
+                        self.logger.error(f"损失为NaN或inf: loss={loss.item()}, policy_loss={policy_loss.item()}, value_loss={value_loss.item()}")
+                        continue
+                    
+                    # 反向传播
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    
+                    # 梯度裁剪
+                    total_norm = torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.MAX_GRAD_NORM
+                    )
+                    
+                    if torch.isnan(total_norm) or torch.isinf(total_norm):
+                        self.logger.error(f"梯度范数为NaN或inf: {total_norm}")
+                        continue
+                    
+                    # 更新参数
+                    self.optimizer.step()
                 
-                # 反向传播
-                self.optimizer.zero_grad()
-                self.scaler.scale(loss).backward()
+                # 累计损失
+                total_loss += loss.item()
+                total_policy_loss += policy_loss.item()
+                total_value_loss += value_loss.item()
                 
-                # 梯度裁剪
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.MAX_GRAD_NORM
-                )
+                # 更新进度条
+                progress_bar.set_postfix({
+                    'loss': f'{loss.item():.4f}',
+                    'policy_loss': f'{policy_loss.item():.4f}',
+                    'value_loss': f'{value_loss.item():.4f}'
+                })
                 
-                # 更新参数
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                # 前向传播
-                policy_out, value_out = self.model(batch_states)
-                
-                # 计算损失
-                policy_loss = -torch.sum(batch_policies * torch.log(policy_out + 1e-8)) / len(batch_states)
-                value_loss = torch.mean((value_out - batch_values) ** 2)
-                loss = policy_loss + value_loss
-                
-                # 反向传播
-                self.optimizer.zero_grad()
-                loss.backward()
-                
-                # 梯度裁剪
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.MAX_GRAD_NORM
-                )
-                
-                # 更新参数
-                self.optimizer.step()
-            
-            # 累计损失
-            total_loss += loss.item()
-            total_policy_loss += policy_loss.item()
-            total_value_loss += value_loss.item()
-            
-            # 更新进度条
-            progress_bar.set_postfix({
-                'loss': f'{loss.item():.4f}',
-                'policy_loss': f'{policy_loss.item():.4f}',
-                'value_loss': f'{value_loss.item():.4f}'
-            })
+            except Exception as e:
+                self.logger.error(f"训练批次出错: {str(e)}")
+                continue
             
             # 实时刷新输出
             sys.stdout.flush()
         
         # 计算平均损失
-        avg_loss = total_loss / num_batches
-        avg_policy_loss = total_policy_loss / num_batches
-        avg_value_loss = total_value_loss / num_batches
+        if num_batches > 0:
+            avg_loss = total_loss / num_batches
+            avg_policy_loss = total_policy_loss / num_batches
+            avg_value_loss = total_value_loss / num_batches
+        else:
+            avg_loss = avg_policy_loss = avg_value_loss = float('nan')
         
         return avg_loss, avg_policy_loss, avg_value_loss
     

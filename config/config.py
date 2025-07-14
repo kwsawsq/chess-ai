@@ -43,23 +43,23 @@ class Config:
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 128  # 减小批量以加快处理
-        self.NUM_EPOCHS = 10  # 减少训练轮次
-        self.LEARNING_RATE = 0.002
+        self.BATCH_SIZE = 64  # 进一步减小批量以提高稳定性
+        self.NUM_EPOCHS = 5  # 减少训练轮次
+        self.LEARNING_RATE = 0.0001  # 显著降低学习率
         self.WEIGHT_DECAY = 1e-4
-        self.MAX_GRAD_NORM = 1.0
+        self.MAX_GRAD_NORM = 0.5  # 更严格的梯度裁剪
         
         # 学习率调度
-        self.LR_MILESTONES = [50, 100, 150]  # 调整里程碑
-        self.LR_GAMMA = 0.1
+        self.LR_MILESTONES = [100, 200, 300]  # 调整里程碑
+        self.LR_GAMMA = 0.5  # 更温和的学习率衰减
         
         # 训练迭代次数
-        self.NUM_ITERATIONS = 1000
+        self.NUM_ITERATIONS = 100  # 先减少迭代次数测试
         
         # 自我对弈配置 - 优化并行度
-        self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数以加快一轮完成
-        self.PARALLEL_GAMES = 4  # 保持适度并行
-        self.NUM_WORKERS = 2
+        self.NUM_SELF_PLAY_GAMES = 50  # 大幅减少游戏数以加快测试
+        self.PARALLEL_GAMES = 2  # 减少并行数
+        self.NUM_WORKERS = 1  # 减少worker数量避免多进程问题
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
