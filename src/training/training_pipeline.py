@@ -9,9 +9,13 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from datetime import datetime
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from tqdm import tqdm
 
 from ..game import ChessGame
-from ..neural_network import AlphaZeroNet
+from ..neural_network import AlphaZeroNet, AlphaZeroLoss
 from ..self_play import SelfPlay
 from ..evaluation import Evaluator
 
@@ -145,36 +149,63 @@ class TrainingPipeline:
             self._save_final_model()
             self.stats['training_time'] = time.time() - start_time
             self.logger.info(f"训练结束，总用时: {self.stats['training_time']:.2f}秒")
-    
+
     def _train_network(self) -> Dict[str, float]:
         """
-        训练神经网络一个周期
+        训练神经网络
         
         Returns:
-            Dict[str, float]: 训练统计信息
+            Dict[str, float]: 训练统计信息, 如果数据不足则返回None
         """
-        # 准备训练数据
-        states, policy_targets, value_targets = zip(*self.training_data)
-        states = np.array(states)
-        policy_targets = np.array(policy_targets)
-        value_targets = np.array(value_targets)
-        
-        # 训练模型
-        history = self.current_net.train(
-            states,
-            policy_targets,
-            value_targets,
-            batch_size=self.config.BATCH_SIZE,
-            epochs=self.config.NUM_EPOCHS
-        )
-        
-        # 提取并记录训练统计数据
-        policy_loss = history.history.get('policy_loss', [0])
-        
+        if len(self.training_data) < self.config.BATCH_SIZE:
+            self.logger.warning(f"训练数据不足 ({len(self.training_data)})，跳过训练。")
+            return None
+
+        optimizer = torch.optim.Adam(self.current_net.parameters(), lr=self.config.LEARNING_RATE, weight_decay=self.config.WEIGHT_DECAY)
+        criterion = AlphaZeroLoss()
+
+        self.current_net.train()
+
+        all_policy_loss = []
+        all_value_loss = []
+        all_total_loss = []
+
+        for epoch in range(self.config.NUM_EPOCHS):
+            self.logger.info(f"开始 Epoch {epoch + 1}/{self.config.NUM_EPOCHS}")
+            
+            np.random.shuffle(self.training_data)
+            
+            progress_bar = tqdm(range(0, len(self.training_data), self.config.BATCH_SIZE), desc=f"Epoch {epoch + 1}")
+            
+            for i in progress_bar:
+                batch_data = self.training_data[i:i+self.config.BATCH_SIZE]
+                states, policy_targets, value_targets = zip(*batch_data)
+
+                states = np.array(states)
+                policy_targets = np.array(policy_targets)
+                value_targets = np.array(value_targets)
+                
+                loss_dict = self.current_net.train_step(
+                    states, 
+                    policy_targets, 
+                    value_targets, 
+                    optimizer, 
+                    criterion
+                )
+                
+                all_policy_loss.append(loss_dict['policy_loss'])
+                all_value_loss.append(loss_dict['value_loss'])
+                all_total_loss.append(loss_dict['total_loss'])
+                
+                progress_bar.set_postfix({
+                    'policy_loss': np.mean(all_policy_loss),
+                    'value_loss': np.mean(all_value_loss)
+                })
+
         return {
-            'policy_loss': float(np.mean(policy_loss)),
-            'value_loss': float(np.mean(history['value_loss'])),
-            'total_loss': float(np.mean(history['total_loss']))
+            'policy_loss': np.mean(all_policy_loss),
+            'value_loss': np.mean(all_value_loss),
+            'total_loss': np.mean(all_total_loss)
         }
     
     def _evaluate_model(self) -> Dict[str, float]:
@@ -209,20 +240,16 @@ class TrainingPipeline:
             iteration: 当前迭代次数
             eval_stats: 评估统计信息
         """
-        checkpoint = {
+        checkpoint_path = os.path.join(self.checkpoint_dir, f'checkpoint_iter_{iteration}.pth')
+        
+        self.current_net.save(checkpoint_path, {
             'iteration': iteration,
             'model_state_dict': self.current_net.state_dict(),
+            'optimizer_state_dict': None, # We create optimizer on the fly
             'stats': self.stats,
             'eval_stats': eval_stats,
-            'config': self.config
-        }
-        
-        checkpoint_path = os.path.join(
-            self.checkpoint_dir,
-            f'checkpoint_iter_{iteration}.pth'
-        )
-        
-        self.current_net.save(checkpoint_path, checkpoint)
+            'training_data_sample': self.training_data[:1000] # Save a sample
+        })
         self.logger.info(f"保存检查点到: {checkpoint_path}")
     
     def _save_final_model(self):
@@ -289,21 +316,24 @@ class TrainingPipeline:
             checkpoint = self.current_net.load(checkpoint_path)
             if checkpoint:
                 self.stats = checkpoint.get('stats', self.stats)
-                self.logger.info(f"成功加载检查点: {checkpoint_path}")
+                
+                # Load a sample of training data if available
+                if 'training_data_sample' in checkpoint:
+                    self.training_data = checkpoint['training_data_sample']
+                    self.logger.info(f"从检查点加载了 {len(self.training_data)} 条训练数据样本。")
+
+                self.logger.info(f"从 {checkpoint_path} 成功加载检查点，将从迭代 {self.stats['iteration']} 继续。")
                 return True
         except Exception as e:
             self.logger.error(f"加载检查点失败: {str(e)}")
         return False
     
     def get_statistics(self) -> Dict[str, Any]:
-        """
-        获取训练统计信息
-        
-        Returns:
-            Dict[str, Any]: 统计信息字典
-        """
+        """获取当前训练统计信息"""
         return {
-            'stats': self.stats,
-            'training_history': self.training_history,
+            'iteration': self.stats['iteration'],
+            'total_games': self.stats['total_games'],
+            'best_win_rate': self.stats['best_win_rate'],
+            'training_time': self.stats['training_time'],
             'current_data_size': len(self.training_data)
         } 
