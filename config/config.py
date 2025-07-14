@@ -55,7 +55,7 @@ class Config:
         self.LR_GAMMA = 0.5
         
         # 训练迭代次数
-        self.NUM_ITERATIONS = 1000  # 增加总迭代次数,进行更长时间的训练
+        self.NUM_ITERATIONS = 50  # 先测试50次迭代，验证优化效果
         
         # 自我对弈配置 - 充分利用多核CPU和GPU
         self.NUM_SELF_PLAY_GAMES = 500  # 每轮生成更多的游戏数据

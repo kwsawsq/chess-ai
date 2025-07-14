@@ -1,45 +1,47 @@
 #!/usr/bin/env python3
 """
-测试训练修复效果
+测试训练脚本 - 50次迭代
 """
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append('/root/chess-ai')
 
-from src.neural_network.model import AlphaZeroNet
-from src.training.trainer import Trainer
 from config.config import config
-import torch
-import numpy as np
+from src.training.training_pipeline import TrainingPipeline
 
-def test_training():
-    """测试训练功能"""
-    print("开始测试训练修复效果...")
+def main():
+    print("=== 开始50次迭代测试训练 ===")
+    print(f"配置信息:")
+    print(f"  - 迭代次数: {config.NUM_ITERATIONS}")
+    print(f"  - 评估间隔: {config.EVAL_INTERVAL}")
+    print(f"  - 评估对局数: {config.EVAL_EPISODES}")
+    print(f"  - 评估MCTS搜索: {config.NUM_MCTS_SIMS_EVAL}")
+    print(f"  - 训练MCTS搜索: {config.NUM_MCTS_SIMS}")
+    print(f"")
+    print(f"预期总时间: 约4.3小时")
+    print(f"评估时间点: 第10, 20, 30, 40, 50次迭代")
+    print(f"")
     
-    # 创建模型
-    model = AlphaZeroNet(config)
-    print(f"模型创建成功，设备: {model.device}")
+    # 创建训练流水线
+    pipeline = TrainingPipeline(config)
     
-    # 创建训练器
-    trainer = Trainer(model, config)
-    print("训练器创建成功")
-    
-    # 测试少量迭代
-    print(f"开始测试训练 ({config.NUM_ITERATIONS} 次迭代)...")
     try:
-        trainer.train(config.NUM_ITERATIONS)
-        print("训练测试完成!")
+        # 开始训练
+        pipeline.train(config.NUM_ITERATIONS)
+        print("\n🎉 测试训练完成！")
         
-        # 保存模型
-        model_path = 'models/test_model.pth'
-        trainer.save_model(model_path)
-        print(f"模型已保存到: {model_path}")
+        # 显示统计信息
+        stats = pipeline.get_statistics()
+        print(f"\n=== 最终统计 ===")
+        print(f"总游戏数: {stats.get('total_games', 0)}")
+        print(f"最佳胜率: {stats.get('best_win_rate', 0):.2%}")
         
+    except KeyboardInterrupt:
+        print("\n⏹️ 训练被手动停止")
     except Exception as e:
-        print(f"训练测试失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n❌ 训练出错: {e}")
+        raise
 
 if __name__ == "__main__":
-    test_training() 
+    main() 
