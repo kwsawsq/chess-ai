@@ -76,6 +76,9 @@ class Evaluator:
             move = game.select_move(policy)
             game.make_move(move)
 
+        # 获取游戏结果
+        result = game.get_result()
+        
         # 返回游戏结果, 并带上谁是新模型的信息 (由start_player决定)
         # 如果新模型是先手(1), 且赢了(1), 结果是1
         # 如果新模型是后手(-1), 且赢了(-1), 结果是1
