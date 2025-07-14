@@ -36,6 +36,7 @@ class SelfPlay:
         self.model = model
         self.config = config
         self.visualizer = ResultVisualizer()
+        self.logger = logging.getLogger(__name__)
         
     def _play_game(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
         """
