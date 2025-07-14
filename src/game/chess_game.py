@@ -65,8 +65,14 @@ class ChessGame:
         # 获取合法移动的概率
         legal_probs = policy[legal_indices]
         
-        # 归一化概率
-        legal_probs = legal_probs / np.sum(legal_probs)
+        # 检查并修复概率分布
+        prob_sum = np.sum(legal_probs)
+        if prob_sum <= 0 or np.isnan(prob_sum) or np.any(np.isnan(legal_probs)):
+            # 如果概率分布有问题，使用均匀分布
+            legal_probs = np.ones(len(legal_moves)) / len(legal_moves)
+        else:
+            # 归一化概率
+            legal_probs = legal_probs / prob_sum
         
         # 根据概率选择移动
         selected_idx = np.random.choice(len(legal_moves), p=legal_probs)
