@@ -43,27 +43,27 @@ class Config:
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 64  # 进一步减小批量以提高稳定性
-        self.NUM_EPOCHS = 5  # 减少训练轮次
-        self.LEARNING_RATE = 0.0001  # 显著降低学习率
+        self.BATCH_SIZE = 512  # 4090D显存很大,可以承受更大的批次
+        self.NUM_EPOCHS = 5
+        self.LEARNING_RATE = 0.0001
         self.WEIGHT_DECAY = 1e-4
-        self.MAX_GRAD_NORM = 0.5  # 更严格的梯度裁剪
+        self.MAX_GRAD_NORM = 0.5
         
         # 学习率调度
-        self.LR_MILESTONES = [100, 200, 300]  # 调整里程碑
-        self.LR_GAMMA = 0.5  # 更温和的学习率衰减
+        self.LR_MILESTONES = [100, 200, 300]
+        self.LR_GAMMA = 0.5
         
         # 训练迭代次数
-        self.NUM_ITERATIONS = 100  # 先减少迭代次数测试
+        self.NUM_ITERATIONS = 1000  # 增加总迭代次数,进行更长时间的训练
         
-        # 自我对弈配置 - 优化并行度
-        self.NUM_SELF_PLAY_GAMES = 50  # 大幅减少游戏数以加快测试
-        self.PARALLEL_GAMES = 2  # 减少并行数
-        self.NUM_WORKERS = 1  # 减少worker数量避免多进程问题
+        # 自我对弈配置 - 充分利用多核CPU和GPU
+        self.NUM_SELF_PLAY_GAMES = 500  # 每轮生成更多的游戏数据
+        self.PARALLEL_GAMES = 16  # 增加并行游戏数
+        self.NUM_WORKERS = 16  # 关键: 使用更多CPU核心来生成数据
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
-        self.EVAL_EPISODES = 10
+        self.EVAL_EPISODES = 20 # 增加评估对局数
         self.EVAL_WIN_RATE = 0.55
         
         # 数据增强
@@ -74,12 +74,12 @@ class Config:
         torch.set_float32_matmul_precision('medium')
         
         # 缓存设置
-        self.REPLAY_BUFFER_SIZE = 500000  # 减小缓存以加快访问
-        self.MIN_REPLAY_SIZE = 5000
+        self.REPLAY_BUFFER_SIZE = 500000
+        self.MIN_REPLAY_SIZE = 20000 # 确保有足够多的初始数据再开始训练
         
         # 保存和加载
-        self.SAVE_INTERVAL = 50  # 更频繁地保存
-        self.CHECKPOINT_INTERVAL = 500
+        self.SAVE_INTERVAL = 10  # 更频繁地保存
+        self.CHECKPOINT_INTERVAL = 100
         
         # 日志设置
         self.TENSORBOARD_LOG_DIR = os.path.join(self.LOG_DIR, 'tensorboard')
