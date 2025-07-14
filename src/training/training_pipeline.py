@@ -129,16 +129,23 @@ class TrainingPipeline:
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
 
-                # 3. 评估新模型
-                self.logger.info("开始模型评估...")
-                evaluation_stats = self._evaluate_model()
+                # 3. 评估新模型（按间隔进行）
+                if (iteration + 1) % self.config.EVAL_INTERVAL == 0:
+                    self.logger.info("开始模型评估...")
+                    evaluation_stats = self._evaluate_model()
+                else:
+                    self.logger.info(f"跳过评估（将在第 {((iteration + 1) // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
+                    evaluation_stats = None
 
                 # 4. 保存检查点
                 if (iteration + 1) % self.config.SAVE_INTERVAL == 0:
                     self._save_checkpoint(iteration + 1, evaluation_stats)
 
                 # 记录本次迭代信息
-                self._log_iteration_stats(iteration + 1, train_stats, evaluation_stats)
+                if evaluation_stats is not None:
+                    self._log_iteration_stats(iteration + 1, train_stats, evaluation_stats)
+                else:
+                    self._log_training_only_stats(iteration + 1, train_stats)
 
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")
@@ -248,7 +255,7 @@ class TrainingPipeline:
 
         return eval_stats
     
-    def _save_checkpoint(self, iteration: int, eval_stats: Dict[str, float]):
+    def _save_checkpoint(self, iteration: int, eval_stats: Optional[Dict[str, float]]):
         """
         保存检查点
         
@@ -291,6 +298,28 @@ class TrainingPipeline:
         else:
             self.logger.warning("没有训练数据可供保存。")
     
+    def _log_training_only_stats(self,
+                               iteration: int, 
+                               train_stats: Dict[str, float]):
+        """
+        记录只有训练统计的迭代信息
+        
+        Args:
+            iteration: 当前迭代次数
+            train_stats: 训练统计信息
+        """
+        self.logger.info(
+            f"\n迭代 {iteration} 统计信息:\n"
+            f"训练损失:\n"
+            f"  - 策略损失: {train_stats['policy_loss']:.4f}\n"
+            f"  - 价值损失: {train_stats['value_loss']:.4f}\n"
+            f"  - 总损失: {train_stats['total_loss']:.4f}\n"
+            f"评估: 跳过（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）\n"
+            f"累计统计:\n"
+            f"  - 总对弈局数: {self.stats['total_games']}\n"
+            f"  - 最佳胜率: {self.stats['best_win_rate']:.2%}"
+        )
+
     def _log_iteration_stats(self,
                            iteration: int,
                            train_stats: Dict[str, float],

@@ -38,7 +38,7 @@ class Config:
         
         # MCTS配置 - 减少单次搜索时间
         self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
-        self.NUM_MCTS_SIMS_EVAL = 200  # 评估时的模拟次数（更快）
+        self.NUM_MCTS_SIMS_EVAL = 100  # 评估时的模拟次数（更快）
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
@@ -64,7 +64,8 @@ class Config:
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
-        self.EVAL_EPISODES = 20 # 增加评估对局数
+        self.EVAL_EPISODES = 10  # 减少评估对局数以加快速度
+        self.EVAL_INTERVAL = 10  # 每10次迭代才评估一次
         self.EVAL_WIN_RATE = 0.55
         
         # 数据增强
