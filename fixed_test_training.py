@@ -17,7 +17,7 @@ import torch
 # from config.config import config
 # from src.training.training_pipeline import TrainingPipeline
 
-def setup_logging():
+def setup_logging(config):
     """设置全局日志"""
     os.makedirs(config.LOG_DIR, exist_ok=True)
     
@@ -77,7 +77,7 @@ def main():
     from config.config import config
     from src.training.training_pipeline import TrainingPipeline
 
-    logger, log_file = setup_logging()
+    logger, log_file = setup_logging(config)
     
     print("=== 修复的测试训练脚本 ===")
     print(f"日志文件: {log_file}")
