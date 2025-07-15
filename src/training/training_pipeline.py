@@ -379,29 +379,44 @@ class TrainingPipeline:
     
     def load_checkpoint(self, checkpoint_path: str) -> bool:
         """
-        加载检查点
+        加载检查点，恢复训练状态
         
         Args:
-            checkpoint_path: 检查点文件路径
+            checkpoint_path (str): 检查点文件路径
             
         Returns:
-            bool: 是否成功加载
+            bool: 是否加载成功
         """
+        if not os.path.exists(checkpoint_path):
+            self.logger.warning(f"检查点文件不存在: {checkpoint_path}")
+            return False
+            
         try:
-            checkpoint = self.current_net.load(checkpoint_path)
-            if checkpoint:
-                self.stats = checkpoint.get('stats', self.stats)
-                
-                # Load a sample of training data if available
-                if 'training_data_sample' in checkpoint:
-                    self.training_data = checkpoint['training_data_sample']
-                    self.logger.info(f"从检查点加载了 {len(self.training_data)} 条训练数据样本。")
+            self.logger.info(f"正在从 {checkpoint_path} 加载检查点...")
+            # 使用 map_location='cpu' 避免在加载时占用GPU显存，并可能加速加载
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            
+            # 恢复网络权重
+            self.current_net.load_state_dict(checkpoint['model_state_dict'])
+            self.logger.info("成功恢复模型权重。")
+            
+            # 恢复训练统计数据
+            self.stats = checkpoint['stats']
+            self.logger.info(f"成功恢复训练统计: {self.stats}")
 
-                self.logger.info(f"从 {checkpoint_path} 成功加载检查点，将从迭代 {self.stats['iteration']} 继续。")
-                return True
+            # 可选：恢复训练历史
+            if 'training_history' in checkpoint:
+                self.training_history = checkpoint['training_history']
+            
+            # 注意：暂时不加载训练数据，因为这可能是导致卡顿的原因
+            # 如果需要，应该从单独的文件或在训练开始时重新生成
+            if 'training_data' in checkpoint:
+                self.logger.info(f"检查点包含 {len(checkpoint['training_data'])} 条训练数据，本次不加载以加快启动速度。")
+
+            return True
         except Exception as e:
-            self.logger.error(f"加载检查点失败: {str(e)}")
-        return False
+            self.logger.error(f"加载检查点 {checkpoint_path} 失败: {e}", exc_info=True)
+            return False
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取当前训练统计信息"""
