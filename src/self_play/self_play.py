@@ -61,7 +61,7 @@ def _play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float
         values_hist.append(value)
         
         # 根据温度参数选择确定性或随机性走法
-        temp = 1 if len(game.history) <= g_config.TEMP_THRESHOLD else 0
+        temp = 1 if len(game.board.board.move_stack) <= g_config.TEMP_THRESHOLD else 0
         move = game.select_move(policy, deterministic=(temp == 0))
         game.make_move(move)
 
