@@ -174,11 +174,8 @@ class TrainingPipeline:
                     self._save_checkpoint(iteration, evaluation_stats)
                 
                 # 记录本次迭代信息
-                if evaluation_stats is not None:
-                    self._log_iteration_stats(iteration, train_stats, evaluation_stats)
-                else:
-                    self._log_training_only_stats(iteration, train_stats)
-                
+                self._log_iteration_stats(iteration, train_stats, evaluation_stats)
+
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")
         except Exception as e:
@@ -327,8 +324,6 @@ class TrainingPipeline:
             states, policies, values = zip(*self.training_data)
             np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
         self.logger.info(f"保存训练数据到: {data_path}")
-        else:
-            self.logger.warning("没有训练数据可供保存。")
     
     def _log_training_only_stats(self,
                                iteration: int, 
