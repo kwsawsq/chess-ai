@@ -43,12 +43,13 @@ class ChessGame:
         # 获取规范形式的状态
         return self.board.get_canonical_form(current_player)
     
-    def select_move(self, policy: np.ndarray) -> str:
+    def select_move(self, policy: np.ndarray, deterministic: bool = False) -> str:
         """
         根据策略选择移动
         
         Args:
             policy: 策略概率分布
+            deterministic: 是否采用确定性选择（总是选择最优）
             
         Returns:
             str: 选择的移动（UCI格式，如 'e2e4'）
@@ -73,8 +74,13 @@ class ChessGame:
             # 归一化概率
             legal_probs = legal_probs / np.sum(legal_probs)
         
-        # 根据概率选择移动
-        selected_idx = np.random.choice(len(legal_moves), p=legal_probs)
+        if deterministic:
+            # 确定性选择：选择概率最高的移动
+            selected_idx = np.argmax(legal_probs)
+        else:
+            # 随机性选择：根据概率分布选择
+            selected_idx = np.random.choice(len(legal_moves), p=legal_probs)
+
         selected_move = legal_moves[selected_idx]
         
         # 返回UCI格式的移动
