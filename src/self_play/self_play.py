@@ -8,7 +8,7 @@ import time
 import logging
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Any
-from concurrent.futures import ProcessPoolExecutor, as_completed, BrokenProcessPool
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing
 import torch
 import sys
@@ -64,14 +64,18 @@ class SelfPlay:
                         progress_bar.update(1)
                         progress_bar.set_postfix({'数据量': len(all_examples)})
                     except Exception as e:
-                        self.logger.error(f"一个自我对弈任务失败: {e}", exc_info=True)
+                        # 捕获通用异常并检查特定错误消息
+                        if "A process in the process pool was terminated abruptly" in str(e):
+                             self.logger.error("!!! 工作进程池已损坏！这很可能是因为子进程因内存不足（OOM）而被系统终止。")
+                             self.logger.error("请尝试在配置中减少工作进程数（NUM_WORKERS），然后重试。")
+                        else:
+                            self.logger.error(f"一个自我对弈任务失败: {e}", exc_info=True)
                         progress_bar.update(1) # 即使失败也要更新进度条
             
             progress_bar.close()
 
-        except BrokenProcessPool:
-            self.logger.error("!!! 工作进程池已损坏！这很可能是因为子进程因内存不足（OOM）而被系统终止。")
-            self.logger.error("请尝试在配置中减少工作进程数（NUM_WORKERS），然后重试。")
+        except Exception as e:
+             self.logger.error(f"创建进程池时发生严重错误: {e}", exc_info=True)
         
         # 将模型移回原设备
         self.model.to(self.config.DEVICE)
