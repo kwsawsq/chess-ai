@@ -36,15 +36,15 @@ class Config:
         self.VALUE_HEAD_HIDDEN = 256
         self.POLICY_HEAD_HIDDEN = 256
         
-        # MCTS配置 - 减少单次搜索时间
+        # MCTS配置 - 优化搜索深度和评估
         self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
-        self.NUM_MCTS_SIMS_EVAL = 100  # 评估时的模拟次数（更快）
+        self.NUM_MCTS_SIMS_EVAL = 800  # 评估时使用与训练相同的模拟次数
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 512  # 4090D显存很大,可以承受更大的批次
+        self.BATCH_SIZE = 1024  # 增大批次大小，充分利用4090D的显存
         self.NUM_EPOCHS = 5
         self.LEARNING_RATE = 0.0001
         self.WEIGHT_DECAY = 1e-4
@@ -60,7 +60,7 @@ class Config:
         # 自我对弈配置 - 充分利用多核CPU和GPU
         self.NUM_SELF_PLAY_GAMES = 500  # 每轮生成更多的游戏数据
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 16  # 关键: 使用更多CPU核心来生成数据
+        self.NUM_WORKERS = 12  # 使用12个CPU核心，留出4个核心给系统
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
