@@ -38,14 +38,14 @@ class Config:
         
         # MCTS配置 - 优化搜索深度和评估
         self.NUM_MCTS_SIMS = 400  # 减少模拟次数，加快对弈速度
-        self.MCTS_BATCH_SIZE = 96 # 再次增大MCTS批处理，榨干GPU
+        self.MCTS_BATCH_SIZE = 64 # 回调至一个更稳健的批处理大小
         self.NUM_MCTS_SIMS_EVAL = 100  # 进一步降低评估复杂度
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 6144  # 再次增大批次大小，榨干4090D的显存
+        self.BATCH_SIZE = 2048  # 降回安全的批次大小，避免OOM
         self.NUM_EPOCHS = 5
         self.LEARNING_RATE = 0.0005  # 提高学习率以跳出平台期
         self.WEIGHT_DECAY = 1e-4
@@ -61,7 +61,7 @@ class Config:
         # 自我对弈配置 - 充分利用多核CPU和GPU
         self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数量，加快一轮迭代速度
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 16  # CPU有富余，增加worker以匹配更快的GPU
+        self.NUM_WORKERS = 12  # 回调至12个worker，平衡速度与显存
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
