@@ -91,10 +91,14 @@ def main():
         if use_optimal:
             config.NUM_WORKERS = optimal_workers
     
+    # 临时修改：强制使用单进程模式进行调试
+    print("⚠️  临时调试模式：强制使用单进程进行自我对弈")
+    config.NUM_WORKERS = 1
+    
     print(f"\n配置信息:")
     print(f"  - 迭代次数: {config.NUM_ITERATIONS}")
     print(f"  - 自我对弈游戏数: {config.NUM_SELF_PLAY_GAMES}")
-    print(f"  - 工作进程数: {config.NUM_WORKERS}")
+    print(f"  - 工作进程数: {config.NUM_WORKERS} (调试模式)")
     print(f"  - 评估间隔: {config.EVAL_INTERVAL}")
     print(f"")
     
