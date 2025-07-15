@@ -9,6 +9,7 @@ import glob
 import logging
 import psutil
 from datetime import datetime
+import multiprocessing as mp
 
 sys.path.append('/root/chess-ai')
 
@@ -139,6 +140,19 @@ def main():
         print(f"\n❌ 训练出错: {e}")
         logger.error(f"训练出错: {e}", exc_info=True)
         raise
+    finally:
+        # 恢复原始配置
+        # config.NUM_WORKERS = original_workers
+        pass
 
 if __name__ == "__main__":
+    # 为保证CUDA在多进程中的稳定性，在程序入口处设置启动方式为'spawn'
+    # 这必须在任何与CUDA相关的操作或子进程启动之前完成。
+    if mp.get_start_method(allow_none=True) != 'spawn':
+        try:
+            mp.set_start_method('spawn', force=True)
+            print("INFO: Multiprocessing start method set to 'spawn'.")
+        except RuntimeError:
+            # 如果已经设置，可能会报错，可以安全忽略
+            pass
     main() 

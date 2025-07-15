@@ -90,10 +90,6 @@ class SelfPlay:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        # 设置多进程启动方法
-        if torch.cuda.is_available() and multiprocessing.get_start_method(allow_none=True) != 'spawn':
-            multiprocessing.set_start_method('spawn', force=True)
-
     def generate_training_data(self, num_games: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """
         通过并行自我对弈生成训练数据。

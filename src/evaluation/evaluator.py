@@ -132,14 +132,6 @@ class Evaluator:
         benchmark_model.to('cpu')
         new_model_state = model.state_dict()
         old_model_state = benchmark_model.state_dict()
-        
-        # 为了稳定性和避免CUDA问题，推荐使用'spawn'方法
-        try:
-            mp.set_start_method('spawn', force=True)
-            self.logger.info("多进程启动方式设置为 'spawn'.")
-        except RuntimeError:
-            # 如果已经设置过了，会抛出RuntimeError，可以安全地忽略
-            pass
             
         initargs = (new_model_state, old_model_state, self.config)
 
