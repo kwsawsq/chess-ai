@@ -91,7 +91,9 @@ def main():
     latest_checkpoint = find_latest_checkpoint(config)
     if latest_checkpoint:
         print(f"发现检查点文件: {latest_checkpoint}")
-        use_checkpoint = input("是否从检查点继续训练? (y/n): ").lower() == 'y'
+        print("⚠️  注意：由于模型架构已优化，旧检查点不兼容。")
+        print("建议从头开始训练以获得最佳性能。")
+        use_checkpoint = input("是否强制尝试加载检查点? (建议选择n) (y/n): ").lower() == 'y'
     else:
         print("未发现检查点文件，将重新开始训练")
         use_checkpoint = False
