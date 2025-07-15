@@ -38,6 +38,7 @@ class Config:
         
         # MCTS配置 - 优化搜索深度和评估
         self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
+        self.MCTS_BATCH_SIZE = 16 # MCTS内部评估的批处理大小，以充分利用GPU
         self.NUM_MCTS_SIMS_EVAL = 200  # 降低评估复杂度，加快评估速度
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3

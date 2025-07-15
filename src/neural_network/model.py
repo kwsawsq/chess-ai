@@ -184,33 +184,31 @@ class AlphaZeroNet(nn.Module):
             
             return policy_probs, value
     
-    def predict_batch(self, boards: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def predict_batch(self, states: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        批量预测
+        对一批状态进行预测
         
         Args:
-            boards: 棋盘状态批量 (batch_size, 20, 8, 8)
+            states (np.ndarray): 形状为 (N, C, H, W) 的状态数组
             
         Returns:
-            Tuple[np.ndarray, np.ndarray]: (策略概率批量, 价值批量)
+            Tuple[np.ndarray, np.ndarray]: 策略和价值数组
         """
         self.eval()
         with torch.no_grad():
-            # 转换为张量
-            board_tensor = torch.FloatTensor(boards).to(self.device)
+            states_tensor = torch.from_numpy(states).to(self.device)
             
-            # 前向传播
-            policy_logits, value = self.forward(board_tensor)
-            
-            # 转换为概率
-            policy_probs = F.softmax(policy_logits, dim=1)
-            
-            # 转换回numpy
-            policy_probs = policy_probs.cpu().numpy()
+            if self.use_amp:
+                with torch.cuda.amp.autocast():
+                    policy_logits, value = self(states_tensor)
+            else:
+                policy_logits, value = self(states_tensor)
+
+            policy = torch.softmax(policy_logits, dim=1).cpu().numpy()
             value = value.cpu().numpy()
             
-            return policy_probs, value
-    
+        return policy, value
+
     def train_step(self,
                   states: np.ndarray,
                   policy_targets: np.ndarray,
