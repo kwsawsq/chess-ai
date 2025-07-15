@@ -38,7 +38,7 @@ class Config:
         
         # MCTS配置 - 优化搜索深度和评估
         self.NUM_MCTS_SIMS = 400  # 减少模拟次数，加快对弈速度
-        self.MCTS_BATCH_SIZE = 64 # 回调至一个更稳健的批处理大小
+        self.MCTS_BATCH_SIZE = 48 # 适配8个worker的稳健批处理大小
         self.NUM_MCTS_SIMS_EVAL = 100  # 进一步降低评估复杂度
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
@@ -61,7 +61,7 @@ class Config:
         # 自我对弈配置 - 充分利用多核CPU和GPU
         self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数量，加快一轮迭代速度
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 12  # 回调至12个worker，平衡速度与显存
+        self.NUM_WORKERS = 8  # 核心修复：减少worker数量以避免启动时OOM
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
