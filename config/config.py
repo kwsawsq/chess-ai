@@ -38,7 +38,7 @@ class Config:
         
         # MCTS配置 - 优化搜索深度和评估
         self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
-        self.NUM_MCTS_SIMS_EVAL = 800  # 评估时使用与训练相同的模拟次数
+        self.NUM_MCTS_SIMS_EVAL = 200  # 降低评估复杂度，加快评估速度
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
@@ -46,7 +46,7 @@ class Config:
         # 训练配置 - 优化批处理以加快训练
         self.BATCH_SIZE = 1024  # 增大批次大小，充分利用4090D的显存
         self.NUM_EPOCHS = 5
-        self.LEARNING_RATE = 0.0001
+        self.LEARNING_RATE = 0.0005  # 提高学习率以跳出平台期
         self.WEIGHT_DECAY = 1e-4
         self.MAX_GRAD_NORM = 0.5
         
