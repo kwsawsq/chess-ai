@@ -22,7 +22,7 @@ class MCTS:
         self.model = model
         self.config = config
         self.logger = logging.getLogger(__name__)
-
+        
     def search(self, board: ChessBoard, add_noise: bool = True) -> Tuple[np.ndarray, float]:
         """
         对当前棋盘进行MCTS搜索

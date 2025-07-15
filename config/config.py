@@ -24,28 +24,28 @@ class Config:
         if self.USE_GPU:
             torch.cuda.set_device(self.GPU_ID)
         
-        # 神经网络配置 - 保持大模型以充分利用GPU
-        self.NUM_CHANNELS = 256
-        self.NUM_RESIDUAL_BLOCKS = 8
+        # 神经网络配置 - 增大模型以充分利用GPU
+        self.NUM_CHANNELS = 512  # 增大通道数，提高模型容量和GPU利用率
+        self.NUM_RESIDUAL_BLOCKS = 12  # 增加残差块数量
         self.DROPOUT_RATE = 0.3
         
         # 神经网络输入输出配置
         self.IN_CHANNELS = 20
         self.BOARD_SIZE = 8
         self.ACTION_SIZE = 4096
-        self.VALUE_HEAD_HIDDEN = 256
-        self.POLICY_HEAD_HIDDEN = 256
+        self.VALUE_HEAD_HIDDEN = 512  # 增大隐藏层大小
+        self.POLICY_HEAD_HIDDEN = 512  # 增大隐藏层大小
         
         # MCTS配置 - 优化搜索深度和评估
-        self.NUM_MCTS_SIMS = 800  # 训练时的模拟次数
-        self.MCTS_BATCH_SIZE = 16 # MCTS内部评估的批处理大小，以充分利用GPU
-        self.NUM_MCTS_SIMS_EVAL = 200  # 降低评估复杂度，加快评估速度
+        self.NUM_MCTS_SIMS = 400  # 减少模拟次数，加快对弈速度
+        self.MCTS_BATCH_SIZE = 32 # 增大MCTS批处理大小，提高GPU利用率
+        self.NUM_MCTS_SIMS_EVAL = 100  # 进一步降低评估复杂度
         self.C_PUCT = 1.0
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
         
         # 训练配置 - 优化批处理以加快训练
-        self.BATCH_SIZE = 1024  # 增大批次大小，充分利用4090D的显存
+        self.BATCH_SIZE = 2048  # 进一步增大批次大小，充分利用4090D的显存
         self.NUM_EPOCHS = 5
         self.LEARNING_RATE = 0.0005  # 提高学习率以跳出平台期
         self.WEIGHT_DECAY = 1e-4
@@ -59,9 +59,9 @@ class Config:
         self.NUM_ITERATIONS = 50  # 先测试50次迭代，验证优化效果
         
         # 自我对弈配置 - 充分利用多核CPU和GPU
-        self.NUM_SELF_PLAY_GAMES = 500  # 每轮生成更多的游戏数据
+        self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数量，加快一轮迭代速度
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 12  # 使用12个CPU核心，留出4个核心给系统
+        self.NUM_WORKERS = 8  # 增加到8个worker，更好利用CPU和GPU
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
