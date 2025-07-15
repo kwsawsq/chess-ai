@@ -85,32 +85,64 @@ class TrainingPipeline:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
     
-    def train(self, num_iterations: int):
+    def run(self, start_iter: int = 1, load_model_path: str = None, load_data_path: str = None):
+        """
+        运行完整的训练流程
+        
+        Args:
+            start_iter (int): 开始的迭代次数
+            load_model_path (str, optional): 要加载的模型路径. Defaults to None.
+            load_data_path (str, optional): 要加载的数据路径. Defaults to None.
+        """
+        if load_model_path and os.path.exists(load_model_path):
+            if self.current_net.load_model(load_model_path):
+                self.logger.info(f"成功从 {load_model_path} 加载模型。")
+                # 尝试从文件名解析迭代次数
+                try:
+                    num_str = os.path.basename(load_model_path).split('_')[-1].split('.')[0]
+                    self.stats['iteration'] = int(num_str)
+                    start_iter = self.stats['iteration'] + 1
+                except (ValueError, IndexError):
+                    self.stats['iteration'] = start_iter -1
+                    
+        if load_data_path and os.path.exists(load_data_path):
+            try:
+                data = np.load(load_data_path, allow_pickle=True)
+                self.training_data = data['data'].tolist()
+                self.logger.info(f"成功从 {load_data_path} 加载 {len(self.training_data)} 条数据。")
+            except Exception as e:
+                self.logger.error(f"加载数据文件 {load_data_path} 失败: {e}")
+
+        self.train(start_iter)
+
+    def train(self, start_iteration: int):
         """
         执行训练循环
         
         Args:
-            num_iterations: 训练迭代次数
+            start_iteration (int): 开始的迭代次数
         """
         start_time = time.time()
         
+        num_total_iterations = self.config.NUM_ITERATIONS
+        
         try:
-            for iteration in range(self.stats['iteration'], num_iterations):
-                self.stats['iteration'] = iteration + 1
-                self.logger.info(f"开始训练迭代 {iteration + 1}/{num_iterations}")
-
+            for iteration in range(start_iteration, num_total_iterations + 1):
+                self.stats['iteration'] = iteration
+                self.logger.info(f"开始训练迭代 {iteration}/{num_total_iterations}")
+                
                 # 1. 自我对弈生成数据
                 self.logger.info("开始自我对弈...")
                 new_examples = self.self_play.generate_training_data(
                     num_games=self.config.NUM_SELF_PLAY_GAMES
                 )
-
+                
                 if new_examples:
                     self.training_data.extend(new_examples)
                     
                     if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
                         self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
-                    
+                
                     self.stats['total_games'] += self.config.NUM_SELF_PLAY_GAMES
                     self.logger.info(f"生成了 {len(new_examples)} 个新样本, 当前总样本数: {len(self.training_data)}")
                 else:
@@ -120,7 +152,7 @@ class TrainingPipeline:
                 if len(self.training_data) < self.config.MIN_REPLAY_SIZE:
                     self.logger.info(f"当前样本数 {len(self.training_data)} 不足 {self.config.MIN_REPLAY_SIZE}, 跳过本轮训练。")
                     continue
-
+                
                 # 2. 训练神经网络
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
@@ -128,25 +160,25 @@ class TrainingPipeline:
                     self.training_history.append(train_stats)
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
-
+                
                 # 3. 评估新模型（按间隔进行）
-                if (iteration + 1) % self.config.EVAL_INTERVAL == 0:
+                if iteration % self.config.EVAL_INTERVAL == 0:
                     self.logger.info("开始模型评估...")
                     evaluation_stats = self._evaluate_model()
                 else:
-                    self.logger.info(f"跳过评估（将在第 {((iteration + 1) // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
+                    self.logger.info(f"跳过评估（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
                     evaluation_stats = None
-
+                
                 # 4. 保存检查点
-                if (iteration + 1) % self.config.SAVE_INTERVAL == 0:
-                    self._save_checkpoint(iteration + 1, evaluation_stats)
-
+                if iteration % self.config.SAVE_INTERVAL == 0:
+                    self._save_checkpoint(iteration, evaluation_stats)
+                
                 # 记录本次迭代信息
                 if evaluation_stats is not None:
-                    self._log_iteration_stats(iteration + 1, train_stats, evaluation_stats)
+                    self._log_iteration_stats(iteration, train_stats, evaluation_stats)
                 else:
-                    self._log_training_only_stats(iteration + 1, train_stats)
-
+                    self._log_training_only_stats(iteration, train_stats)
+                
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")
         except Exception as e:
@@ -156,7 +188,7 @@ class TrainingPipeline:
             self._save_final_model()
             self.stats['training_time'] = time.time() - start_time
             self.logger.info(f"训练结束，总用时: {self.stats['training_time']:.2f}秒")
-
+    
     def _train_network(self) -> Dict[str, float]:
         """
         训练神经网络
@@ -193,9 +225,9 @@ class TrainingPipeline:
                 value_targets = np.array(value_targets)
                 
                 loss_dict = self.current_net.train_step(
-                    states, 
-                    policy_targets, 
-                    value_targets, 
+                    states,
+                    policy_targets,
+                    value_targets,
                     optimizer, 
                     criterion
                 )
@@ -208,13 +240,13 @@ class TrainingPipeline:
                     'policy_loss': np.mean(all_policy_loss),
                     'value_loss': np.mean(all_value_loss)
                 })
-
+        
         return {
             'policy_loss': np.mean(all_policy_loss),
             'value_loss': np.mean(all_value_loss),
             'total_loss': np.mean(all_total_loss)
         }
-
+    
     def _evaluate_model(self) -> Dict[str, float]:
         """
         评估当前模型
@@ -233,7 +265,7 @@ class TrainingPipeline:
         # 使用评估器进行评估
         win_rate, draw_rate, loss_rate = self.evaluator.evaluate(
             self.current_net, 
-            previous_net, 
+            previous_net,
             num_games=self.config.EVAL_EPISODES
         )
         
@@ -252,7 +284,7 @@ class TrainingPipeline:
             self.stats['best_win_rate'] = eval_stats['win_rate']
             self.logger.info(f"新高胜率! 保存为最佳模型。")
             self.current_net.save(os.path.join(self.config.MODEL_DIR, 'best_model.pth'))
-
+        
         return eval_stats
     
     def _save_checkpoint(self, iteration: int, eval_stats: Optional[Dict[str, float]]):
@@ -294,7 +326,7 @@ class TrainingPipeline:
         if self.training_data:
             states, policies, values = zip(*self.training_data)
             np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
-            self.logger.info(f"保存训练数据到: {data_path}")
+        self.logger.info(f"保存训练数据到: {data_path}")
         else:
             self.logger.warning("没有训练数据可供保存。")
     
@@ -319,7 +351,7 @@ class TrainingPipeline:
             f"  - 总对弈局数: {self.stats['total_games']}\n"
             f"  - 最佳胜率: {self.stats['best_win_rate']:.2%}"
         )
-
+    
     def _log_iteration_stats(self,
                            iteration: int,
                            train_stats: Dict[str, float],
