@@ -22,142 +22,54 @@ class MCTS:
         self.model = model
         self.config = config
         self.logger = logging.getLogger(__name__)
-        # Tree is now instance-specific, not global
-        self.tree: Dict[str, MCTSNode] = {} 
 
-    def search(self, board: ChessBoard, temperature: float = 1.0) -> np.ndarray:
-        root_state_hash = board.get_board_hash()
+    def search(self, board: ChessBoard, add_noise: bool = True) -> Tuple[np.ndarray, float]:
+        """
+        对当前棋盘进行MCTS搜索
+        """
+        root_node = MCTSNode(board=board.copy())
+        
+        # 如果根节点是叶子节点，先进行一次评估和扩展
+        if root_node.is_leaf():
+            policy_batch, value_batch = self.model.predict_batch(np.array([root_node.board.get_canonical_form(root_node.player)]))
+            root_node.expand(policy_batch[0])
+            root_node.backup(value_batch[0][0])
 
-        # Add root node if it doesn't exist
-        if root_state_hash not in self.tree:
-            self.tree[root_state_hash] = MCTSNode(parent=None, prior_p=1.0)
+        if add_noise:
+            root_node.add_dirichlet_noise(epsilon=self.config.DIRICHLET_EPSILON, alpha=self.config.DIRICHLET_ALPHA)
 
-        # Initial evaluation for the root if it's a leaf
-        if self.tree[root_state_hash].is_leaf():
-            state_input = np.expand_dims(board.get_canonical_form(board.get_current_player()), axis=0)
-            policy, value = self.model.predict_batch(state_input)
-            self.tree[root_state_hash].expand(policy[0], board.get_legal_moves(), board)
-            self.tree[root_state_hash].backpropagate(-value[0])
-
-        # Main MCTS loop with batching
-        for _ in range(self.config.NUM_MCTS_SIMS):
+        # 批处理循环
+        for _ in range(self.config.NUM_MCTS_SIMS // self.config.MCTS_BATCH_SIZE):
+            pending_evals: List[MCTSNode] = []
             
-            # --- This is the core logic change ---
-            # Instead of one simulation, we will have a loop that collects a batch
-            # of leaf nodes for evaluation.
+            # 1. 选择 & 收集叶子节点
+            for _ in range(self.config.MCTS_BATCH_SIZE):
+                leaf_node = self._select_leaf(root_node)
+                pending_evals.append(leaf_node)
             
-            # For simplicity in this edit, I will show the logic conceptually.
-            # A full rewrite is necessary for mcts.py.
-            
-            node = self.tree[root_state_hash]
-            sim_board = board.copy()
+            # 2. 批处理评估
+            states_batch = np.array([node.board.get_canonical_form(node.player) for node in pending_evals])
+            policies, values = self.model.predict_batch(states_batch)
 
-            # 1. Selection
-            while not node.is_leaf():
-                action, node = node.select(self.config.C_PUCT)
-                sim_board.make_move(chess.Move.from_uci(action))
+            # 3. 扩展 & 反向传播
+            for i, node in enumerate(pending_evals):
+                if not node.is_terminal:
+                    node.expand(policies[i])
+                    node.backup(values[i][0])
+                else: # 如果是终端节点，直接用游戏结果反向传播
+                    node.backup(node.terminal_value)
+        
+        # 从根节点获取最终策略和价值
+        policy = root_node.get_action_probs(temperature=1.0) # 在训练时使用温度1
+        value = root_node.get_value()
+        
+        return policy, value
 
-            # 2. Expansion & Evaluation (but batched)
-            # In a real implementation, this leaf node would be added to a list.
-            # Once the list is full (reaches MCTS_BATCH_SIZE), they are all evaluated at once.
-            
-            # Simplified version:
-            state_input = np.expand_dims(sim_board.get_canonical_form(sim_board.get_current_player()), axis=0)
-            policy, value = self.model.predict_batch(state_input)
-            
-            game_over, game_value = sim_board.get_game_status()
-            if not game_over:
-                node.expand(policy[0], sim_board.get_legal_moves(), sim_board)
-            else:
-                value = np.array([game_value])
-
-            # 3. Backpropagation
-            node.backpropagate(-value[0])
-
-        # Generate final policy based on visit counts
-        return self.get_policy(root_state_hash, temperature)
-
-    def _select_leaf(self, node_hash: str) -> Tuple[str, ChessBoard]:
-        # ... (implementation of selecting a leaf node using UCT)
-        # This will involve traversing the tree until a leaf is found.
-        # It needs to return the hash and the board state of the leaf.
-        pass
-
-    def _get_policy(self, node_hash: str) -> Tuple[np.ndarray, float]:
-        # ... (implementation to get final policy from visit counts)
-        pass
-    
-    def _add_node(self, node_hash: str, board: ChessBoard, is_root: bool = False):
-        # ... (add node to self.nodes)
-        # (This part is complex and involves careful implementation of the MCTS logic)
-        pass # Placeholder for the full implementation
-
-# Note: The full implementation of MCTS with batching is complex. 
-# The edit below is a simplified representation of the required changes.
-# The actual implementation in mcts.py will be more involved.
-
-# Due to the complexity, I will provide a conceptual refactoring.
-# The full, correct implementation would require rewriting large parts of mcts.py.
-# The following is a high-level sketch of the search method.
-
-# --- Start of conceptual edit ---
-class MCTS:
-    def __init__(self, model: AlphaZeroNet, config: Any):
-        self.model = model
-        self.config = config
-        self.logger = logging.getLogger(__name__)
-        # Tree is now instance-specific, not global
-        self.tree: Dict[str, MCTSNode] = {} 
-
-    def search(self, board: ChessBoard, temperature: float = 1.0) -> np.ndarray:
-        root_state_hash = board.get_board_hash()
-
-        # Add root node if it doesn't exist
-        if root_state_hash not in self.tree:
-            self.tree[root_state_hash] = MCTSNode(parent=None, prior_p=1.0)
-
-        # Initial evaluation for the root if it's a leaf
-        if self.tree[root_state_hash].is_leaf():
-            state_input = np.expand_dims(board.get_canonical_form(board.get_current_player()), axis=0)
-            policy, value = self.model.predict_batch(state_input)
-            self.tree[root_state_hash].expand(policy[0], board.get_legal_moves(), board)
-            self.tree[root_state_hash].backpropagate(-value[0])
-
-        # Main MCTS loop with batching
-        for _ in range(self.config.NUM_MCTS_SIMS):
-            
-            # --- This is the core logic change ---
-            # Instead of one simulation, we will have a loop that collects a batch
-            # of leaf nodes for evaluation.
-            
-            # For simplicity in this edit, I will show the logic conceptually.
-            # A full rewrite is necessary for mcts.py.
-            
-            node = self.tree[root_state_hash]
-            sim_board = board.copy()
-
-            # 1. Selection
-            while not node.is_leaf():
-                action, node = node.select(self.config.C_PUCT)
-                sim_board.make_move(chess.Move.from_uci(action))
-
-            # 2. Expansion & Evaluation (but batched)
-            # In a real implementation, this leaf node would be added to a list.
-            # Once the list is full (reaches MCTS_BATCH_SIZE), they are all evaluated at once.
-            
-            # Simplified version:
-            state_input = np.expand_dims(sim_board.get_canonical_form(sim_board.get_current_player()), axis=0)
-            policy, value = self.model.predict_batch(state_input)
-            
-            game_over, game_value = sim_board.get_game_status()
-            if not game_over:
-                node.expand(policy[0], sim_board.get_legal_moves(), sim_board)
-            else:
-                value = np.array([game_value])
-
-            # 3. Backpropagation
-            node.backpropagate(-value[0])
-
-        # Generate final policy based on visit counts
-        return self.get_policy(root_state_hash, temperature)
-# --- End of conceptual edit --- 
+    def _select_leaf(self, node: MCTSNode) -> MCTSNode:
+        """
+        从给定节点开始，选择一个叶子节点进行评估
+        """
+        current_node = node
+        while not current_node.is_leaf():
+            _, current_node = current_node.select_child(self.config.C_PUCT)
+        return current_node 
