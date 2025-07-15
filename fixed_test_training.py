@@ -49,16 +49,25 @@ def find_latest_checkpoint():
 
 def get_optimal_workers():
     """根据系统CPU核心数确定最优工作进程数"""
-    cpu_count = psutil.cpu_count(logical=True)  # 获取逻辑CPU核心数
+    try:
+        # 尝试获取物理CPU核心数
+        cpu_count = psutil.cpu_count(logical=False)  # 只计算物理核心
+        if cpu_count is None or cpu_count > 32:  # 如果检测不准确或数值异常
+            # 在AutoDL等云环境下使用固定的安全值
+            if os.path.exists('/etc/autodl'):  # 检测是否在AutoDL环境
+                return 12  # AutoDL环境下使用12个进程
+            return 8  # 其他环境下的默认值
+    except Exception as e:
+        print(f"警告: CPU核心检测失败 ({e})，使用默认值")
+        return 8
     
-    # 为系统和其他进程预留2个核心
-    optimal_workers = max(1, cpu_count - 2)
-    
-    # 如果是高性能CPU（8核以上），预留更多核心给系统
-    if cpu_count >= 8:
-        optimal_workers = max(1, cpu_count - 4)
-    
-    return optimal_workers
+    # 为系统和其他进程预留核心
+    if cpu_count >= 16:
+        return 12  # 16核及以上使用12个进程
+    elif cpu_count >= 8:
+        return cpu_count - 2  # 8-15核预留2个核心
+    else:
+        return max(1, cpu_count - 1)  # 8核以下预留1个核心
 
 def main():
     logger, log_file = setup_logging()
