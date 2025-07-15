@@ -67,7 +67,7 @@ class AlphaZeroNet(nn.Module):
         super(AlphaZeroNet, self).__init__()
         self.config = config
         self.device = config.DEVICE
-        self.use_amp = config.USE_AMP  # 添加这一行
+        self.use_amp = config.USE_AMP
 
         # 主干网络
         self.backbone = nn.Sequential(
@@ -119,14 +119,8 @@ class AlphaZeroNet(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: (策略logits, 价值)
         """
-        # 输入层
-        x = self.input_conv(x)
-        x = self.input_bn(x)
-        x = F.relu(x)
-        
-        # 残差块
-        for res_layer in self.res_layers:
-            x = res_layer(x)
+        # 主干网络
+        x = self.backbone(x)
         
         # 策略头
         policy = self.policy_conv(x)
@@ -251,11 +245,11 @@ class AlphaZeroNet(nn.Module):
             save_data = {
                 'model_state_dict': self.state_dict(),
                 'model_config': {
-                    'input_channels': self.input_channels,
-                    'channels': self.channels,
-                    'num_res_layers': self.num_res_layers,
-                    'action_size': self.action_size,
-                    'dropout': self.dropout
+                    'input_channels': self.config.IN_CHANNELS,
+                    'channels': self.config.NUM_CHANNELS,
+                    'num_res_layers': self.config.NUM_RESIDUAL_BLOCKS,
+                    'action_size': self.config.ACTION_SIZE,
+                    'dropout': 0.0 # No dropout in the new model
                 }
             }
             
@@ -301,21 +295,21 @@ class AlphaZeroNet(nn.Module):
             Dict[str, Any]: 模型信息
         """
         return {
-            'input_channels': self.input_channels,
-            'channels': self.channels,
-            'num_res_layers': self.num_res_layers,
-            'action_size': self.action_size,
-            'dropout': self.dropout,
+            'input_channels': self.config.IN_CHANNELS,
+            'channels': self.config.NUM_CHANNELS,
+            'num_res_layers': self.config.NUM_RESIDUAL_BLOCKS,
+            'action_size': self.config.ACTION_SIZE,
+            'dropout': 0.0,
             'num_parameters': sum(p.numel() for p in self.parameters()),
             'device': str(self.device)
         }
     
     def __str__(self) -> str:
         """字符串表示"""
-        return f"AlphaZeroNet(in_channels={self.input_channels}, " \
-               f"channels={self.channels}, " \
-               f"res_layers={self.num_res_layers}, " \
-               f"action_size={self.action_size})"
+        return f"AlphaZeroNet(in_channels={self.config.IN_CHANNELS}, " \
+               f"channels={self.config.NUM_CHANNELS}, " \
+               f"res_layers={self.config.NUM_RESIDUAL_BLOCKS}, " \
+               f"action_size={self.config.ACTION_SIZE})"
 
 
 class AlphaZeroLoss(nn.Module):
