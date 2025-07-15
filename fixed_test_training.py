@@ -7,6 +7,7 @@ import sys
 import os
 import glob
 import logging
+import psutil
 from datetime import datetime
 
 sys.path.append('/root/chess-ai')
@@ -46,12 +47,35 @@ def find_latest_checkpoint():
     latest = max(checkpoint_files, key=os.path.getmtime)
     return latest
 
+def get_optimal_workers():
+    """根据系统CPU核心数确定最优工作进程数"""
+    cpu_count = psutil.cpu_count(logical=True)  # 获取逻辑CPU核心数
+    
+    # 为系统和其他进程预留2个核心
+    optimal_workers = max(1, cpu_count - 2)
+    
+    # 如果是高性能CPU（8核以上），预留更多核心给系统
+    if cpu_count >= 8:
+        optimal_workers = max(1, cpu_count - 4)
+    
+    return optimal_workers
+
 def main():
     logger, log_file = setup_logging()
     
     print("=== 修复的测试训练脚本 ===")
     print(f"日志文件: {log_file}")
-    print(f"配置信息:")
+    
+    # 优化工作进程数
+    optimal_workers = get_optimal_workers()
+    if optimal_workers != config.NUM_WORKERS:
+        print(f"系统检测到 {psutil.cpu_count()} 个CPU核心")
+        print(f"建议的工作进程数: {optimal_workers}")
+        use_optimal = input(f"是否使用建议的工作进程数（{optimal_workers}）? (y/n): ").lower() == 'y'
+        if use_optimal:
+            config.NUM_WORKERS = optimal_workers
+    
+    print(f"\n配置信息:")
     print(f"  - 迭代次数: {config.NUM_ITERATIONS}")
     print(f"  - 自我对弈游戏数: {config.NUM_SELF_PLAY_GAMES}")
     print(f"  - 工作进程数: {config.NUM_WORKERS}")
@@ -66,12 +90,6 @@ def main():
     else:
         print("未发现检查点文件，将重新开始训练")
         use_checkpoint = False
-    
-    # 修改配置以避免进程池问题
-    original_workers = config.NUM_WORKERS
-    if original_workers > 8:
-        config.NUM_WORKERS = 4  # 减少进程数量避免内存问题
-        print(f"警告: 将工作进程数从 {original_workers} 降至 {config.NUM_WORKERS} 以避免进程池问题")
     
     # 创建训练流水线
     pipeline = TrainingPipeline(config)
@@ -112,9 +130,6 @@ def main():
         print(f"\n❌ 训练出错: {e}")
         logger.error(f"训练出错: {e}", exc_info=True)
         raise
-    finally:
-        # 恢复原始配置
-        config.NUM_WORKERS = original_workers
 
 if __name__ == "__main__":
     main() 
