@@ -9,6 +9,7 @@ from typing import List, Tuple, Optional, Dict, Any
 import sys
 import os
 import logging
+from datetime import datetime
 
 # 全局变量
 g_model: Optional[Any] = None
@@ -105,6 +106,27 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
 
         game_result = game.get_result()
         logger.info(f"[Worker {worker_id}] 对弈结束，共 {move_count} 步，结果: {game_result}")
+
+        # 如果配置允许，保存PGN文件
+        if g_config.SAVE_PGN:
+            try:
+                # 确保PGN目录存在
+                os.makedirs(g_config.PGN_DIR, exist_ok=True)
+                
+                # 创建唯一文件名
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                pgn_filename = f"game_{timestamp}_worker_{worker_id}.pgn"
+                pgn_filepath = os.path.join(g_config.PGN_DIR, pgn_filename)
+                
+                # 导出并保存PGN
+                pgn_data = game.board.export_pgn()
+                with open(pgn_filepath, "w", encoding="utf-8") as f:
+                    f.write(pgn_data)
+                logger.debug(f"[Worker {worker_id}] PGN棋谱已保存至 {pgn_filepath}")
+                
+            except Exception as e:
+                logger.error(f"[Worker {worker_id}] 保存PGN文件时出错: {e}", exc_info=True)
+
         # 根据最终结果调整价值
         final_values = []
         for i in range(len(values_hist)):

@@ -88,6 +88,10 @@ class Config:
         self.TENSORBOARD_LOG_DIR = os.path.join(self.LOG_DIR, 'tensorboard')
         self.ENABLE_LOGGING = True
         
+        # PGN棋谱保存
+        self.SAVE_PGN = True  # 是否保存自我对弈的棋谱
+        self.PGN_DIR = os.path.join(self.BASE_DIR, 'games') # PGN文件保存目录
+        
         # 性能优化
         self.PIN_MEMORY = True
         self.ASYNC_LOADING = True

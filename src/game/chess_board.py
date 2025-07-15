@@ -5,6 +5,7 @@
 import numpy as np
 import chess
 import chess.engine
+import chess.pgn
 from typing import List, Dict, Tuple, Optional, Any
 import logging
 
@@ -314,4 +315,15 @@ class ChessBoard:
     
     def __repr__(self) -> str:
         """调试表示"""
-        return f"ChessBoard('{self.board.fen()}')" 
+        return f"ChessBoard('{self.board.fen()}')"
+
+    def export_pgn(self) -> str:
+        """
+        将当前棋局导出为PGN格式字符串
+        
+        Returns:
+            str: PGN格式的棋局记录
+        """
+        game = chess.pgn.Game.from_board(self.board)
+        exporter = chess.pgn.StringExporter(headers=True, variations=True, comments=True)
+        return game.accept(exporter) 
