@@ -10,11 +10,12 @@ import logging
 import psutil
 from datetime import datetime
 import multiprocessing as mp
+import torch
 
-sys.path.append('/root/chess-ai')
-
-from config.config import config
-from src.training.training_pipeline import TrainingPipeline
+# 将关键的import移到main函数内部，确保在设置多进程启动方式之后再执行
+# sys.path.append('/root/chess-ai')
+# from config.config import config
+# from src.training.training_pipeline import TrainingPipeline
 
 def setup_logging():
     """设置全局日志"""
@@ -71,6 +72,11 @@ def get_optimal_workers():
         return max(1, cpu_count - 1)  # 8核以下预留1个核心
 
 def main():
+    # 关键修复：将触发CUDA初始化的import移到此处
+    sys.path.append('/root/chess-ai')
+    from config.config import config
+    from src.training.training_pipeline import TrainingPipeline
+
     logger, log_file = setup_logging()
     
     print("=== 修复的测试训练脚本 ===")
@@ -150,6 +156,7 @@ if __name__ == "__main__":
     # 这必须在任何与CUDA相关的操作或子进程启动之前完成。
     if mp.get_start_method(allow_none=True) != 'spawn':
         try:
+            # 必须在任何CUDA调用之前设置
             mp.set_start_method('spawn', force=True)
             print("INFO: Multiprocessing start method set to 'spawn'.")
         except RuntimeError:
