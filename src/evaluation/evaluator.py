@@ -12,14 +12,77 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import torch
+import multiprocessing as mp
 
 from ..neural_network import AlphaZeroNet
 from ..game import ChessGame
 from ..mcts import MCTS
 
-# 移除直接导入
-# from ..self_play import SelfPlay
+# --- Worker Process Initialization ---
+g_new_model: Optional[AlphaZeroNet] = None
+g_old_model: Optional[AlphaZeroNet] = None
+g_config: Optional[Any] = None
 
+def init_worker_evaluate(new_model_state: Dict, old_model_state: Dict, config: Any):
+    """
+    初始化评估工作进程。
+    这个函数在每个工作进程启动时只运行一次。
+    """
+    global g_new_model, g_old_model, g_config
+    
+    g_config = config
+    
+    # 禁用梯度计算以进行推理优化
+    torch.set_grad_enabled(False)
+
+    # 在新进程中重新创建和加载模型
+    g_new_model = AlphaZeroNet(g_config)
+    g_new_model.load_state_dict(new_model_state)
+    g_new_model.to(g_config.DEVICE)
+    g_new_model.eval()
+
+    g_old_model = AlphaZeroNet(g_config)
+    g_old_model.load_state_dict(old_model_state)
+    g_old_model.to(g_config.DEVICE)
+    g_old_model.eval()
+
+def _play_one_game_worker(new_model_plays_white: bool) -> int:
+    """
+    在工作进程中使用已初始化的模型进行一局对弈。
+
+    Args:
+        new_model_plays_white: 新模型是否执白
+
+    Returns:
+        int: 从白方角度看的游戏结果 (1: 白胜, 0: 平局, -1: 黑胜)
+    """
+    global g_new_model, g_old_model, g_config
+    
+    game = ChessGame(g_config)
+    
+    # 为评估创建MCTS实例
+    eval_mcts_config = g_config
+    eval_mcts_config.NUM_MCTS_SIMS = g_config.NUM_MCTS_SIMS_EVAL
+    
+    mcts_new = MCTS(g_new_model, eval_mcts_config)
+    mcts_old = MCTS(g_old_model, eval_mcts_config)
+    
+    models = {1: mcts_new, -1: mcts_old} if new_model_plays_white else {1: mcts_old, -1: mcts_new}
+
+    while not game.is_over():
+        player = game.get_current_player()
+        mcts = models[player]
+        
+        policy, _ = mcts.search(game.board)
+        
+        # 在评估中使用确定性走法（选择概率最高的）
+        move = game.select_move(policy, deterministic=True)
+        game.make_move(move)
+
+    return game.get_result()
+
+# --- End Worker Process Initialization ---
 
 class Evaluator:
     """
@@ -47,64 +110,12 @@ class Evaluator:
         # 评估历史
         self.history: List[Dict[str, Any]] = []
 
-    def _play_one_game(self, model1: AlphaZeroNet, model2: AlphaZeroNet, start_player: int) -> int:
-        """
-        进行一局对弈
-        
-        Args:
-            model1: 模型1 (先手)
-            model2: 模型2 (后手)
-            start_player: 开始玩家 (1 或 -1)
-
-        Returns:
-            int: 游戏结果 (1, 0, -1)
-        """
-        game = ChessGame(self.config)
-        
-        # 创建用于评估的快速配置
-        eval_config = type('', (), {})()
-        for attr in dir(self.config):
-            if not attr.startswith('_'):
-                setattr(eval_config, attr, getattr(self.config, attr))
-        
-        # 使用更少的MCTS搜索次数来加快评估
-        eval_config.NUM_MCTS_SIMS = getattr(self.config, 'NUM_MCTS_SIMS_EVAL', 200)
-        
-        mcts1 = MCTS(model1, eval_config)
-        mcts2 = MCTS(model2, eval_config)
-        
-        models = {1: mcts1, -1: mcts2}
-        if start_player == -1:
-            models = {-1: mcts1, 1: mcts2}
-
-        while not game.is_over():
-            player = game.get_current_player()
-            mcts = models[player]
-            
-            policy, _ = mcts.search(game.board)
-            move = game.select_move(policy)
-            game.make_move(move)
-
-        # 获取游戏结果
-        result = game.get_result()
-        
-        # 返回游戏结果, 并带上谁是新模型的信息 (由start_player决定)
-        # 如果新模型是先手(1), 且赢了(1), 结果是1
-        # 如果新模型是后手(-1), 且赢了(-1), 结果是1
-        # 其他情况为输或平
-        if result == start_player:
-            return 1 # 新模型赢
-        elif result == 0:
-            return 0 # 平局
-        else:
-            return -1 # 新模型输
-
     def evaluate(self, 
                  model: AlphaZeroNet, 
                  benchmark_model: AlphaZeroNet, 
                  num_games: int = 10) -> Tuple[float, float, float]:
         """
-        评估模型性能
+        评估模型性能 (使用优化的并行工作进程)
 
         Args:
             model: 待评估的新模型
@@ -116,38 +127,53 @@ class Evaluator:
         """
         wins, draws, losses = 0, 0, 0
         
-        # 使用进程池并行执行游戏
-        with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS) as executor:
-            futures = []
-            for i in range(num_games):
-                # 交替先后手
-                if i % 2 == 0:
-                    # 新模型执白
-                    futures.append(executor.submit(self._play_one_game, model, benchmark_model, 1))
-                else:
-                    # 新模型执黑
-                    futures.append(executor.submit(self._play_one_game, benchmark_model, model, -1))
+        # 将模型移到CPU以安全地获取state_dict，避免多进程fork问题
+        model.to('cpu')
+        benchmark_model.to('cpu')
+        new_model_state = model.state_dict()
+        old_model_state = benchmark_model.state_dict()
+        
+        # 为了稳定性和避免CUDA问题，推荐使用'spawn'方法
+        try:
+            mp.set_start_method('spawn', force=True)
+            self.logger.info("多进程启动方式设置为 'spawn'.")
+        except RuntimeError:
+            # 如果已经设置过了，会抛出RuntimeError，可以安全地忽略
+            pass
+            
+        initargs = (new_model_state, old_model_state, self.config)
+
+        with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS,
+                                 initializer=init_worker_evaluate,
+                                 initargs=initargs) as executor:
+            
+            # 创建任务，一半新模型执白，一半执黑
+            futures = {executor.submit(_play_one_game_worker, i < num_games / 2): (i < num_games / 2) for i in range(num_games)}
 
             progress_bar = tqdm(as_completed(futures), total=num_games, desc="模型评估")
 
             for future in progress_bar:
+                new_model_was_white = futures[future]
                 try:
+                    # result 是从白方角度的结果 (1=白胜, -1=黑胜)
                     result = future.result()
-                    if result == 1:
+                    
+                    # 根据新模型执白/黑来判断胜负
+                    if (new_model_was_white and result == 1) or \
+                       (not new_model_was_white and result == -1):
                         wins += 1
                     elif result == 0:
                         draws += 1
                     else:
                         losses += 1
 
-                    progress_bar.set_postfix({
-                        'wins': wins,
-                        'draws': draws,
-                        'losses': losses
-                    })
+                    progress_bar.set_postfix({'wins': wins, 'draws': draws, 'losses': losses})
                 except Exception as e:
                     self.logger.error(f"评估子进程出错: {e}", exc_info=True)
 
+        # 评估结束后将模型移回原设备，以进行后续训练
+        model.to(self.config.DEVICE)
+        
         total = wins + draws + losses
         if total == 0:
             return 0.0, 0.0, 0.0
