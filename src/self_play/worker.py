@@ -85,7 +85,7 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
 
         while not game.is_over():
             move_count += 1
-            logger.debug(f"[Worker {worker_id}] 对弈进行中，第 {move_count} 步...")
+            # logger.debug(f"[Worker {worker_id}] 对弈进行中，第 {move_count} 步...")
             
             # 使用MCTS进行搜索
             policy, value = mcts.search(game.board, add_noise=True)
