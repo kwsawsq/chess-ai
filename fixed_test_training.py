@@ -35,7 +35,7 @@ def setup_logging(config):
     
     return logging.getLogger(__name__), log_file
 
-def find_latest_checkpoint():
+def find_latest_checkpoint(config):
     """查找最新的检查点文件"""
     checkpoint_dir = os.path.join(config.MODEL_DIR, 'checkpoints')
     if not os.path.exists(checkpoint_dir):
@@ -99,7 +99,7 @@ def main():
     print(f"")
     
     # 查找是否有检查点文件
-    latest_checkpoint = find_latest_checkpoint()
+    latest_checkpoint = find_latest_checkpoint(config)
     if latest_checkpoint:
         print(f"发现检查点文件: {latest_checkpoint}")
         use_checkpoint = input("是否从检查点继续训练? (y/n): ").lower() == 'y'
