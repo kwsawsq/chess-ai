@@ -63,30 +63,19 @@ class AlphaZeroNet(nn.Module):
     - 价值头：输出局面评估值
     """
     
-    def __init__(self, config):
-        """
-        初始化神经网络
-        
-        Args:
-            config: 配置对象
-        """
+    def __init__(self, config: Any):
         super(AlphaZeroNet, self).__init__()
-        
-        # 从配置中获取参数
-        self.input_channels = config.IN_CHANNELS
-        self.channels = config.NUM_CHANNELS
-        self.num_res_layers = config.NUM_RESIDUAL_BLOCKS
-        self.action_size = config.ACTION_SIZE
-        self.dropout = config.DROPOUT_RATE
-        
-        # 输入层
-        self.input_conv = nn.Conv2d(self.input_channels, self.channels, kernel_size=3, padding=1, bias=False)
-        self.input_bn = nn.BatchNorm2d(self.channels)
-        
-        # 残差块
-        self.res_layers = nn.ModuleList([
-            ResidualBlock(self.channels, self.dropout) for _ in range(self.num_res_layers)
-        ])
+        self.config = config
+        self.device = config.DEVICE
+        self.use_amp = config.USE_AMP  # 添加这一行
+
+        # 主干网络
+        self.backbone = nn.Sequential(
+            nn.Conv2d(config.IN_CHANNELS, config.NUM_CHANNELS, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(config.NUM_CHANNELS),
+            nn.ReLU(inplace=True),
+            *[ResidualBlock(config.NUM_CHANNELS) for _ in range(config.NUM_RESIDUAL_BLOCKS)]
+        )
         
         # 策略头
         self.policy_conv = nn.Conv2d(self.channels, 32, kernel_size=1, bias=False)
@@ -106,7 +95,6 @@ class AlphaZeroNet(nn.Module):
         self.logger = logging.getLogger(__name__)
         
         # 设备配置
-        self.device = torch.device('cuda' if torch.cuda.is_available() and config.USE_GPU else 'cpu')
         self.to(self.device)
     
     def _initialize_weights(self):
