@@ -118,7 +118,7 @@ def main():
         remaining_iterations = config.NUM_ITERATIONS - start_iteration + 1
         if remaining_iterations > 0:
             logger.info(f"开始训练，剩余迭代次数: {remaining_iterations}")
-            pipeline.train(remaining_iterations)
+            pipeline.train(start_iteration)  # 传递起始迭代次数，让train方法处理到配置的总次数
         else:
             logger.info("训练已完成！")
         

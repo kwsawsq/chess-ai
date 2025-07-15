@@ -198,7 +198,7 @@ class Evaluator:
             benchmark_model = AlphaZeroNet(self.config)
         
         win_rate, draw_rate, loss_rate = self.evaluate(model, benchmark_model, num_games)
-
+        
         # 记录评估结果
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         eval_result = {

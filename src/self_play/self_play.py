@@ -61,7 +61,7 @@ class SelfPlay:
                 break
                 
             try:
-                policy, value = self.model.predict(state)
+            policy, value = self.model.predict(state)
             except Exception as e:
                 print(f"预测出错: {e}")
                 break  # 或 continue 跳过当前步骤
@@ -80,14 +80,14 @@ class SelfPlay:
         
         if not moves:  # 如果游戏未完成
             return [], [], []
-
+        
         # 获取游戏结果
         result = game.get_result()
         result_str = "1-0" if result == 1 else "0-1" if result == -1 else "1/2-1/2"
         
         try:
-            # 可视化游戏
-            self.visualizer.display_game(moves, result_str)
+        # 可视化游戏
+        self.visualizer.display_game(moves, result_str)
         except Exception as e:
             print(f"可视化游戏出错: {str(e)}")
             # 错误不影响训练数据返回
@@ -144,12 +144,12 @@ class SelfPlay:
                             continue
             except Exception as e:
                 self.logger.error(f"进程池执行出错: {str(e)}", exc_info=True)
-
+        
         progress_bar.close()
-
+        
         if all_examples:
             self.logger.info(f"生成完成! 总数据量: {len(all_examples)}")
         else:
             self.logger.warning("警告: 没有生成任何有效数据!")
-            
+        
         return all_examples 

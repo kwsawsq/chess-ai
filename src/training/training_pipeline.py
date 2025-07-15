@@ -174,7 +174,10 @@ class TrainingPipeline:
                     self._save_checkpoint(iteration, evaluation_stats)
                 
                 # 记录本次迭代信息
-                self._log_iteration_stats(iteration, train_stats, evaluation_stats)
+                if evaluation_stats is not None:
+                    self._log_iteration_stats(iteration, train_stats, evaluation_stats)
+                else:
+                    self._log_training_only_stats(iteration, train_stats)
 
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")

@@ -183,12 +183,12 @@ class Trainer:
             batch_values = values[start_idx:end_idx]
             
             try:
-                # 使用混合精度训练
-                if self.config.USE_AMP:
-                    with autocast(device_type='cuda'):
-                        # 前向传播
+            # 使用混合精度训练
+            if self.config.USE_AMP:
+                with autocast(device_type='cuda'):
+                    # 前向传播
                         policy_logits, value_out = self.model(batch_states)
-                        
+                    
                         # 计算损失 - 修复策略损失计算
                         policy_probs = torch.softmax(policy_logits, dim=1)
                         policy_probs = torch.clamp(policy_probs, min=1e-8, max=1.0)  # 防止log(0)
@@ -200,37 +200,37 @@ class Trainer:
                         value_loss = torch.mean((value_out.squeeze() - batch_values) ** 2)
                         
                         # 总损失
-                        loss = policy_loss + value_loss
+                    loss = policy_loss + value_loss
                         
                         # 检查损失是否为NaN
                         if torch.isnan(loss) or torch.isinf(loss):
                             self.logger.error(f"损失为NaN或inf: loss={loss.item()}, policy_loss={policy_loss.item()}, value_loss={value_loss.item()}")
                             continue
-                    
-                    # 反向传播
-                    self.optimizer.zero_grad()
-                    self.scaler.scale(loss).backward()
-                    
-                    # 梯度裁剪
-                    self.scaler.unscale_(self.optimizer)
+                
+                # 反向传播
+                self.optimizer.zero_grad()
+                self.scaler.scale(loss).backward()
+                
+                # 梯度裁剪
+                self.scaler.unscale_(self.optimizer)
                     
                     # 检查梯度
                     total_norm = torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.MAX_GRAD_NORM
-                    )
-                    
+                    self.model.parameters(),
+                    self.config.MAX_GRAD_NORM
+                )
+                
                     if torch.isnan(total_norm) or torch.isinf(total_norm):
                         self.logger.error(f"梯度范数为NaN或inf: {total_norm}")
                         continue
                     
-                    # 更新参数
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    # 前向传播
+                # 更新参数
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                # 前向传播
                     policy_logits, value_out = self.model(batch_states)
-                    
+                
                     # 计算损失 - 修复策略损失计算
                     policy_probs = torch.softmax(policy_logits, dim=1)
                     policy_probs = torch.clamp(policy_probs, min=1e-8, max=1.0)  # 防止log(0)
@@ -242,41 +242,41 @@ class Trainer:
                     value_loss = torch.mean((value_out.squeeze() - batch_values) ** 2)
                     
                     # 总损失
-                    loss = policy_loss + value_loss
-                    
+                loss = policy_loss + value_loss
+                
                     # 检查损失是否为NaN
                     if torch.isnan(loss) or torch.isinf(loss):
                         self.logger.error(f"损失为NaN或inf: loss={loss.item()}, policy_loss={policy_loss.item()}, value_loss={value_loss.item()}")
                         continue
                     
-                    # 反向传播
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    
-                    # 梯度裁剪
+                # 反向传播
+                self.optimizer.zero_grad()
+                loss.backward()
+                
+                # 梯度裁剪
                     total_norm = torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.MAX_GRAD_NORM
-                    )
-                    
+                    self.model.parameters(),
+                    self.config.MAX_GRAD_NORM
+                )
+                
                     if torch.isnan(total_norm) or torch.isinf(total_norm):
                         self.logger.error(f"梯度范数为NaN或inf: {total_norm}")
                         continue
                     
-                    # 更新参数
-                    self.optimizer.step()
-                
-                # 累计损失
-                total_loss += loss.item()
-                total_policy_loss += policy_loss.item()
-                total_value_loss += value_loss.item()
-                
-                # 更新进度条
-                progress_bar.set_postfix({
-                    'loss': f'{loss.item():.4f}',
-                    'policy_loss': f'{policy_loss.item():.4f}',
-                    'value_loss': f'{value_loss.item():.4f}'
-                })
+                # 更新参数
+                self.optimizer.step()
+            
+            # 累计损失
+            total_loss += loss.item()
+            total_policy_loss += policy_loss.item()
+            total_value_loss += value_loss.item()
+            
+            # 更新进度条
+            progress_bar.set_postfix({
+                'loss': f'{loss.item():.4f}',
+                'policy_loss': f'{policy_loss.item():.4f}',
+                'value_loss': f'{value_loss.item():.4f}'
+            })
                 
             except Exception as e:
                 self.logger.error(f"训练批次出错: {str(e)}")
@@ -287,9 +287,9 @@ class Trainer:
         
         # 计算平均损失
         if num_batches > 0:
-            avg_loss = total_loss / num_batches
-            avg_policy_loss = total_policy_loss / num_batches
-            avg_value_loss = total_value_loss / num_batches
+        avg_loss = total_loss / num_batches
+        avg_policy_loss = total_policy_loss / num_batches
+        avg_value_loss = total_value_loss / num_batches
         else:
             avg_loss = avg_policy_loss = avg_value_loss = float('nan')
         

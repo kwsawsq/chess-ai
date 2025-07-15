@@ -1,33 +1,30 @@
 """
-国际象棋AI训练主程序 - 使用优化后的训练流水线
+国际象棋AI训练主程序
 """
 
-import logging
-from config.config import config
-from src.training.training_pipeline import TrainingPipeline
+import torch
+from src.neural_network.model import AlphaZeroNet
+from src.training.trainer import Trainer
+from config.config import Config
 
 def main():
-    # 设置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger(__name__)
+    # 加载配置
+    config = Config()
     
-    logger.info("开始训练流程")
+    # 创建模型
+    model = AlphaZeroNet(config)
     
-    # 创建训练流水线
-    pipeline = TrainingPipeline(config)
+    # 创建训练器
+    trainer = Trainer(model, config)
     
+    # 开始训练
     try:
-        # 开始训练
-        pipeline.train(config.NUM_ITERATIONS)
-        logger.info("训练完成")
-        
+        trainer.train(config.NUM_ITERATIONS)
     except KeyboardInterrupt:
-        logger.info("训练被用户中断")
-    except Exception as e:
-        logger.error(f"训练过程出错: {str(e)}", exc_info=True)
+        print("\n训练被用户中断")
+        # 保存检查点
+        trainer.save_model('models/checkpoint_interrupted.pth')
+        print("已保存中断时的检查点")
 
 if __name__ == "__main__":
     main() 

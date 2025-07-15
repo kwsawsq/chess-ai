@@ -76,7 +76,7 @@ class ResultVisualizer:
             try:
                 # 将UCI格式转换为Move对象
                 move = chess.Move.from_uci(move_uci)
-                
+        
                 # 检查移动是否合法
                 if move in board.legal_moves:
                     # 获取SAN表示
