@@ -78,15 +78,15 @@ class AlphaZeroNet(nn.Module):
         )
         
         # 策略头
-        self.policy_conv = nn.Conv2d(self.channels, 32, kernel_size=1, bias=False)
+        self.policy_conv = nn.Conv2d(config.NUM_CHANNELS, 32, kernel_size=1, bias=False)
         self.policy_bn = nn.BatchNorm2d(32)
-        self.policy_fc = nn.Linear(32 * 8 * 8, self.action_size)
+        self.policy_fc = nn.Linear(32 * config.BOARD_SIZE * config.BOARD_SIZE, config.ACTION_SIZE)
         
         # 价值头
-        self.value_conv = nn.Conv2d(self.channels, 3, kernel_size=1, bias=False)
+        self.value_conv = nn.Conv2d(config.NUM_CHANNELS, 3, kernel_size=1, bias=False)
         self.value_bn = nn.BatchNorm2d(3)
-        self.value_fc1 = nn.Linear(3 * 8 * 8, 256)
-        self.value_fc2 = nn.Linear(256, 1)
+        self.value_fc1 = nn.Linear(3 * config.BOARD_SIZE * config.BOARD_SIZE, config.VALUE_HEAD_HIDDEN)
+        self.value_fc2 = nn.Linear(config.VALUE_HEAD_HIDDEN, 1)
         
         # 初始化权重
         self._initialize_weights()
