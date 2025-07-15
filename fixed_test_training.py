@@ -49,27 +49,18 @@ def find_latest_checkpoint(config):
     latest = max(checkpoint_files, key=os.path.getmtime)
     return latest
 
-def get_optimal_workers():
-    """根据系统CPU核心数确定最优工作进程数"""
-    try:
-        # 尝试获取物理CPU核心数
-        cpu_count = psutil.cpu_count(logical=False)  # 只计算物理核心
-        if cpu_count is None or cpu_count > 32:  # 如果检测不准确或数值异常
-            # 在AutoDL等云环境下使用固定的安全值
-            if os.path.exists('/etc/autodl'):  # 检测是否在AutoDL环境
-                return 12  # AutoDL环境下使用12个进程
-            return 8  # 其他环境下的默认值
-    except Exception as e:
-        print(f"警告: CPU核心检测失败 ({e})，使用默认值")
-        return 8
+def get_optimal_workers_for_gpu():
+    """根据GPU内存和CPU核心数，为自我对弈任务建议工作进程数"""
+    cpu_count = psutil.cpu_count(logical=True)
+    print(f"系统检测到 {cpu_count} 个CPU核心")
     
-    # 为系统和其他进程预留核心
-    if cpu_count >= 16:
-        return 12  # 16核及以上使用12个进程
-    elif cpu_count >= 8:
-        return cpu_count - 2  # 8-15核预留2个核心
-    else:
-        return max(1, cpu_count - 1)  # 8核以下预留1个核心
+    # 对于GPU上的自我对弈，每个worker都会加载一个模型，因此主要瓶颈是GPU显存。
+    # 一个比较安全的值是4-8，具体取决于模型大小和GPU显存。
+    # 我们这里推荐一个保守值，以避免显存不足。
+    recommended_workers = 4
+    
+    print("考虑到每个工作进程都需要在GPU上加载模型，推荐使用较少的工作进程以避免显存不足。")
+    return recommended_workers
 
 def main():
     # 关键修复：将触发CUDA初始化的import移到此处
@@ -83,10 +74,8 @@ def main():
     print(f"日志文件: {log_file}")
     
     # 优化工作进程数
-    optimal_workers = get_optimal_workers()
+    optimal_workers = get_optimal_workers_for_gpu()
     if optimal_workers != config.NUM_WORKERS:
-        print(f"系统检测到 {psutil.cpu_count()} 个CPU核心")
-        print(f"建议的工作进程数: {optimal_workers}")
         use_optimal = input(f"是否使用建议的工作进程数（{optimal_workers}）? (y/n): ").lower() == 'y'
         if use_optimal:
             config.NUM_WORKERS = optimal_workers

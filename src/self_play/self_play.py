@@ -8,7 +8,7 @@ import time
 import logging
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Any
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, BrokenProcessPool
 import multiprocessing
 import torch
 import sys
@@ -47,27 +47,32 @@ class SelfPlay:
         # 使用 mp.get_context("spawn") 来创建进程池，这是与CUDA交互最安全的方式
         ctx = multiprocessing.get_context("spawn")
 
-        with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS, mp_context=ctx,
-                                 initializer=init_worker_self_play,
-                                 initargs=initargs) as executor:
-            
-            futures = [executor.submit(play_one_game_worker) for _ in range(num_games)]
-            
-            progress_bar = tqdm(total=num_games, desc="自我对弈", leave=False)
+        try:
+            with ProcessPoolExecutor(max_workers=self.config.NUM_WORKERS, mp_context=ctx,
+                                     initializer=init_worker_self_play,
+                                     initargs=initargs) as executor:
+                
+                futures = [executor.submit(play_one_game_worker) for _ in range(num_games)]
+                
+                progress_bar = tqdm(total=num_games, desc="自我对弈", leave=False)
 
-            for future in as_completed(futures):
-                try:
-                    examples = future.result(timeout=600) # 每个任务10分钟超时
-                    if examples:
-                        all_examples.extend(examples)
-                    progress_bar.update(1)
-                    progress_bar.set_postfix({'数据量': len(all_examples)})
-                except Exception as e:
-                    self.logger.error(f"一个自我对弈任务失败: {e}", exc_info=True)
-                    progress_bar.update(1) # 即使失败也要更新进度条
+                for future in as_completed(futures):
+                    try:
+                        examples = future.result(timeout=600) # 每个任务10分钟超时
+                        if examples:
+                            all_examples.extend(examples)
+                        progress_bar.update(1)
+                        progress_bar.set_postfix({'数据量': len(all_examples)})
+                    except Exception as e:
+                        self.logger.error(f"一个自我对弈任务失败: {e}", exc_info=True)
+                        progress_bar.update(1) # 即使失败也要更新进度条
+            
+            progress_bar.close()
+
+        except BrokenProcessPool:
+            self.logger.error("!!! 工作进程池已损坏！这很可能是因为子进程因内存不足（OOM）而被系统终止。")
+            self.logger.error("请尝试在配置中减少工作进程数（NUM_WORKERS），然后重试。")
         
-        progress_bar.close()
-
         # 将模型移回原设备
         self.model.to(self.config.DEVICE)
 

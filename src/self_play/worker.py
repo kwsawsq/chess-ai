@@ -23,6 +23,26 @@ def init_worker_self_play(model_state: Dict, config: Any):
     try:
         g_config = config
         
+        # 为每个工作进程设置单独的日志文件
+        worker_log_dir = os.path.join(g_config.LOG_DIR, 'workers')
+        os.makedirs(worker_log_dir, exist_ok=True)
+        worker_log_file = os.path.join(worker_log_dir, f'worker_{os.getpid()}.log')
+        
+        # 配置日志
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(worker_log_file),
+                logging.StreamHandler(sys.stdout) # 将日志也输出到标准输出
+            ],
+            force=True # 覆盖任何现有的日志配置
+        )
+        
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"工作进程 {os.getpid()} 开始初始化...")
+        
         # 禁用梯度计算以进行推理优化
         torch.set_grad_enabled(False)
         
@@ -37,12 +57,10 @@ def init_worker_self_play(model_state: Dict, config: Any):
         g_model.to(g_config.DEVICE)
         g_model.eval()
         
-        print(f"Worker initialized successfully on device: {g_config.DEVICE}")
+        logger.info(f"工作进程 {os.getpid()} 初始化成功，设备: {g_config.DEVICE}")
         
     except Exception as e:
-        print(f"Worker initialization failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"工作进程 {os.getpid()} 初始化失败: {e}", exc_info=True)
         raise
 
 def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]]]:
@@ -50,8 +68,11 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
     在工作进程中进行一局自我对弈。
     """
     global g_model, g_config
+    logger = logging.getLogger(__name__)
+    worker_id = os.getpid()
     
     try:
+        logger.info(f"[Worker {worker_id}] 开始一局新的对弈。")
         # 动态导入模块
         from src.game import ChessGame
         from src.mcts import MCTS
@@ -60,8 +81,11 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
         mcts = MCTS(g_model, g_config)
         
         states_hist, policies_hist, values_hist = [], [], []
+        move_count = 0
 
         while not game.is_over():
+            move_count += 1
+            logger.debug(f"[Worker {worker_id}] 对弈进行中，第 {move_count} 步...")
             state = game.get_state()
             policy, value = mcts.search(game.board)
             
@@ -75,10 +99,12 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
             game.make_move(move)
 
         if not game.is_over():
+            logger.warning(f"[Worker {worker_id}] 对弈异常结束，未分出胜负。")
             return None
 
-        # 根据最终结果调整价值
         game_result = game.get_result()
+        logger.info(f"[Worker {worker_id}] 对弈结束，共 {move_count} 步，结果: {game_result}")
+        # 根据最终结果调整价值
         final_values = []
         for i in range(len(values_hist)):
             # 价值是从当前玩家的角度出发的，所以需要交替
@@ -88,7 +114,5 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
         return list(zip(states_hist, policies_hist, final_values))
         
     except Exception as e:
-        print(f"Worker game failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[Worker {worker_id}] 对弈失败: {e}", exc_info=True)
         return None 
