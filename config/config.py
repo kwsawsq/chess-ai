@@ -61,7 +61,7 @@ class Config:
         # 自我对弈配置 - 充分利用多核CPU和GPU
         self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数量，加快一轮迭代速度
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
-        self.NUM_WORKERS = 8  # 核心修复：减少worker数量以避免启动时OOM
+        self.NUM_WORKERS = 6  # 核心修复：减少worker数量以避免启动时OOM
         self.TEMP_THRESHOLD = 10
         
         # 评估配置
