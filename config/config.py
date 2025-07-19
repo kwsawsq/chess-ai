@@ -14,10 +14,10 @@ class Config:
         # 将数据保存在项目目录下，便于管理
         self.DATA_DISK_PATH = os.environ.get('CHESS_AI_DATA_PATH', self.BASE_DIR)
 
-        # 数据目录 - 使用数据盘
-        self.DATA_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-data')
-        self.MODEL_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-models')
-        self.LOG_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-logs')
+        # 数据目录 - 使用项目目录下的标准文件夹
+        self.DATA_DIR = os.path.join(self.BASE_DIR, 'data')
+        self.MODEL_DIR = os.path.join(self.BASE_DIR, 'models')
+        self.LOG_DIR = os.path.join(self.BASE_DIR, 'logs')
 
         # 创建必要的目录
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR]:
@@ -102,7 +102,7 @@ class Config:
         
         # PGN棋谱保存
         self.SAVE_PGN = True  # 是否保存自我对弈的棋谱
-        self.PGN_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-games') # PGN文件保存目录
+        self.PGN_DIR = os.path.join(self.BASE_DIR, 'data', 'games') # PGN文件保存目录
         
         # 性能优化
         self.PIN_MEMORY = True
