@@ -6,7 +6,9 @@
 import os
 import time
 import logging
+import shutil
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 import numpy as np
 from datetime import datetime
 import torch
@@ -70,6 +72,9 @@ class TrainingPipeline:
             'best_win_rate': 0.0,
             'training_time': 0.0
         }
+
+        # 磁盘空间管理
+        self.min_free_space_gb = 1.0  # 最小保留空间(GB)
     
     def _setup_logging(self):
         """设置日志"""

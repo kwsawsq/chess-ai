@@ -9,13 +9,29 @@ class Config:
     def __init__(self):
         # 基础目录
         self.BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.DATA_DIR = os.path.join(self.BASE_DIR, 'data')
-        self.MODEL_DIR = os.path.join(self.BASE_DIR, 'models')
-        self.LOG_DIR = os.path.join(self.BASE_DIR, 'logs')
-        
+
+        # 数据盘路径配置 - 用于解决磁盘空间不足问题
+        # 在autodl环境中，通常数据盘挂载在 /root/autodl-tmp
+        # 您可以根据实际情况修改这个路径
+        self.DATA_DISK_PATH = os.environ.get('CHESS_AI_DATA_PATH', '/root/autodl-tmp')
+
+        # 如果数据盘路径不存在，回退到项目目录
+        if not os.path.exists(self.DATA_DISK_PATH):
+            print(f"警告: 数据盘路径 {self.DATA_DISK_PATH} 不存在，使用项目目录")
+            self.DATA_DISK_PATH = self.BASE_DIR
+
+        # 数据目录 - 使用数据盘
+        self.DATA_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-data')
+        self.MODEL_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-models')
+        self.LOG_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-logs')
+
         # 创建必要的目录
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR]:
             os.makedirs(dir_path, exist_ok=True)
+
+        print(f"数据目录: {self.DATA_DIR}")
+        print(f"模型目录: {self.MODEL_DIR}")
+        print(f"日志目录: {self.LOG_DIR}")
         
         # GPU配置
         self.USE_GPU = torch.cuda.is_available()
@@ -90,7 +106,7 @@ class Config:
         
         # PGN棋谱保存
         self.SAVE_PGN = True  # 是否保存自我对弈的棋谱
-        self.PGN_DIR = os.path.join(self.BASE_DIR, 'games') # PGN文件保存目录
+        self.PGN_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-games') # PGN文件保存目录
         
         # 性能优化
         self.PIN_MEMORY = True
