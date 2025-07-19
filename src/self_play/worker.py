@@ -86,13 +86,13 @@ def init_worker_self_play(model_state: Dict, config: Any):
         os.makedirs(worker_log_dir, exist_ok=True)
         worker_log_file = os.path.join(worker_log_dir, f'worker_{os.getpid()}.log')
         
-        # 配置日志 - 减少终端输出
+        # 配置日志 - 显示重要的对弈信息
         logging.basicConfig(
-            level=logging.INFO,  # 改为INFO级别，减少DEBUG输出
+            level=logging.INFO,  # 保持INFO级别
             format='%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler(worker_log_file),
-                # 移除标准输出，减少终端日志
+                logging.StreamHandler(sys.stdout)  # 恢复标准输出，显示重要信息
             ],
             force=True # 覆盖任何现有的日志配置
         )
