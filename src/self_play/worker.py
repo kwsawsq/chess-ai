@@ -206,7 +206,10 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
                 pgn_data = game.board.export_pgn()
                 with open(pgn_filepath, "w", encoding="utf-8") as f:
                     f.write(pgn_data)
-                logger.info(f"[Worker {worker_id}] PGN棋谱已保存至 {pgn_filepath}")
+                # 使用相对路径显示PGN保存位置
+                home_dir = os.path.expanduser('~')
+                pgn_display = pgn_filepath.replace(home_dir, '~') if pgn_filepath.startswith(home_dir) else pgn_filepath
+                logger.info(f"[Worker {worker_id}] PGN棋谱已保存至 {pgn_display}")
                 
             except Exception as e:
                 logger.error(f"[Worker {worker_id}] 保存PGN文件时出错: {e}", exc_info=True)

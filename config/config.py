@@ -29,9 +29,15 @@ class Config:
 
         # 显示目录信息
         if not hasattr(self, 'QUIET_MODE') or not self.QUIET_MODE:
-            print(f"数据目录: {self.DATA_DIR}")
-            print(f"模型目录: {self.MODEL_DIR}")
-            print(f"日志目录: {self.LOG_DIR}")
+            # 使用相对路径显示，更友好
+            home_dir = os.path.expanduser('~')
+            data_dir_display = self.DATA_DIR.replace(home_dir, '~') if self.DATA_DIR.startswith(home_dir) else self.DATA_DIR
+            model_dir_display = self.MODEL_DIR.replace(home_dir, '~') if self.MODEL_DIR.startswith(home_dir) else self.MODEL_DIR
+            log_dir_display = self.LOG_DIR.replace(home_dir, '~') if self.LOG_DIR.startswith(home_dir) else self.LOG_DIR
+            
+            print(f"数据目录: {data_dir_display}")
+            print(f"模型目录: {model_dir_display}")
+            print(f"日志目录: {log_dir_display}")
         
         # GPU配置
         self.USE_GPU = torch.cuda.is_available()
