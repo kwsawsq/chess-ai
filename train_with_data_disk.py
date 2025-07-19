@@ -75,9 +75,11 @@ def clean_old_data():
     """清理旧的训练数据以释放空间"""
     from config.config import Config
     config = Config()
-    
+
     print("\n检查是否需要清理旧数据...")
-    
+
+    total_freed = 0
+
     # 检查模型目录
     if os.path.exists(config.MODEL_DIR):
         model_files = list(Path(config.MODEL_DIR).glob("*.pth"))
@@ -85,9 +87,14 @@ def clean_old_data():
             print(f"发现 {len(model_files)} 个模型文件，清理旧模型...")
             model_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
             for old_model in model_files[5:]:
-                print(f"删除旧模型: {old_model}")
-                old_model.unlink()
-    
+                try:
+                    file_size = old_model.stat().st_size
+                    old_model.unlink()
+                    total_freed += file_size
+                    print(f"删除旧模型: {old_model} ({file_size / (1024*1024):.1f}MB)")
+                except Exception as e:
+                    print(f"删除失败 {old_model}: {e}")
+
     # 检查数据目录
     if os.path.exists(config.DATA_DIR):
         data_files = list(Path(config.DATA_DIR).glob("*.npz"))
@@ -95,8 +102,54 @@ def clean_old_data():
             print(f"发现 {len(data_files)} 个数据文件，清理旧数据...")
             data_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
             for old_data in data_files[3:]:
-                print(f"删除旧数据: {old_data}")
-                old_data.unlink()
+                try:
+                    file_size = old_data.stat().st_size
+                    old_data.unlink()
+                    total_freed += file_size
+                    print(f"删除旧数据: {old_data} ({file_size / (1024*1024):.1f}MB)")
+                except Exception as e:
+                    print(f"删除失败 {old_data}: {e}")
+
+    # 清理临时文件
+    temp_patterns = ['*.tmp', '*.temp', '*~', '.DS_Store']
+    for pattern in temp_patterns:
+        for temp_file in Path(config.DATA_DIR).rglob(pattern):
+            try:
+                file_size = temp_file.stat().st_size
+                temp_file.unlink()
+                total_freed += file_size
+            except:
+                pass
+
+    if total_freed > 0:
+        print(f"总共释放空间: {total_freed / (1024*1024):.1f}MB")
+    else:
+        print("没有需要清理的文件")
+
+def monitor_training_space(config):
+    """训练过程中的空间监控"""
+    import threading
+    import time
+
+    def space_monitor():
+        while True:
+            try:
+                total, used, free = check_disk_space(config.DATA_DIR)
+                if free and free < 2.0:  # 少于2GB时警告
+                    print(f"\n⚠️  磁盘空间警告: 可用空间仅剩 {free:.1f}GB")
+                    if free < 1.0:  # 少于1GB时强制清理
+                        print("🔧 自动清理旧文件...")
+                        clean_old_data()
+
+                time.sleep(300)  # 每5分钟检查一次
+            except Exception as e:
+                print(f"空间监控出错: {e}")
+                time.sleep(600)  # 出错时等待10分钟再试
+
+    # 启动后台监控线程
+    monitor_thread = threading.Thread(target=space_monitor, daemon=True)
+    monitor_thread.start()
+    print("✅ 磁盘空间监控已启动")
 
 def main():
     """主函数"""
@@ -123,9 +176,12 @@ def main():
         print(f"训练迭代次数: {config.NUM_ITERATIONS}")
         print(f"每轮自我对弈游戏数: {config.NUM_SELF_PLAY_GAMES}")
         
+        # 启动磁盘空间监控
+        monitor_training_space(config)
+
         # 创建训练流水线
         pipeline = TrainingPipeline(config)
-        
+
         # 检查是否有检查点可以恢复
         start_iteration = 1
         checkpoint_files = list(Path(config.MODEL_DIR).glob("checkpoint_iter_*.pth"))

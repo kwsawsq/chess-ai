@@ -75,6 +75,11 @@ class TrainingPipeline:
 
         # 磁盘空间管理
         self.min_free_space_gb = 1.0  # 最小保留空间(GB)
+        self.max_model_files = 5      # 最多保留的模型文件数
+        self.max_data_files = 3       # 最多保留的数据文件数
+
+        # 磁盘空间管理
+        self.min_free_space_gb = 1.0  # 最小保留空间(GB)
     
     def _setup_logging(self):
         """设置日志"""
@@ -135,7 +140,12 @@ class TrainingPipeline:
             for iteration in range(start_iteration, num_total_iterations + 1):
                 self.stats['iteration'] = iteration
                 self.logger.info(f"开始训练迭代 {iteration}/{num_total_iterations}")
-                
+
+                # 0. 检查磁盘空间
+                if not self._monitor_disk_space():
+                    self.logger.error("磁盘空间不足，停止训练")
+                    break
+
                 # 1. 自我对弈生成数据
                 self.logger.info("开始自我对弈...")
                 new_examples = self.self_play.generate_training_data(
@@ -176,7 +186,11 @@ class TrainingPipeline:
                 
                 # 4. 保存检查点
                 if iteration % self.config.SAVE_INTERVAL == 0:
-                    self._save_checkpoint(iteration, evaluation_stats)
+                    # 保存前检查磁盘空间
+                    if self._monitor_disk_space():
+                        self._save_checkpoint(iteration, evaluation_stats)
+                    else:
+                        self.logger.warning("磁盘空间不足，跳过检查点保存")
                 
                 # 记录本次迭代信息
                 if evaluation_stats is not None:
@@ -190,7 +204,10 @@ class TrainingPipeline:
             self.logger.error(f"训练过程出错: {str(e)}", exc_info=True)
         finally:
             # 保存最终模型和训练数据
-            self._save_final_model()
+            if self._monitor_disk_space():
+                self._save_final_model()
+            else:
+                self.logger.error("磁盘空间不足，无法保存最终模型")
             self.stats['training_time'] = time.time() - start_time
             self.logger.info(f"训练结束，总用时: {self.stats['training_time']:.2f}秒")
     
@@ -314,25 +331,160 @@ class TrainingPipeline:
     
     def _save_final_model(self):
         """保存最终模型"""
-        final_model_path = os.path.join(
-            self.config.MODEL_DIR,
-            'final_model.pth'
-        )
-        
-        self.current_net.save(final_model_path)
-        self.logger.info(f"保存最终模型到: {final_model_path}")
-        
-        # 保存训练数据
-        data_path = os.path.join(
-            self.config.DATA_DIR,
-            'final_training_data.npz'
-        )
-        
-        if self.training_data:
-            states, policies, values = zip(*self.training_data)
-            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
-        self.logger.info(f"保存训练数据到: {data_path}")
-    
+        try:
+            # 保存模型
+            final_model_path = os.path.join(
+                self.config.MODEL_DIR,
+                'final_model.pth'
+            )
+
+            self.current_net.save(final_model_path)
+            self.logger.info(f"保存最终模型到: {final_model_path}")
+
+            # 保存训练数据前检查空间
+            if self.training_data:
+                # 估算数据大小
+                sample_data = self.training_data[:100] if len(self.training_data) > 100 else self.training_data
+                if sample_data:
+                    states, policies, values = zip(*sample_data)
+                    sample_size = (np.array(states).nbytes + np.array(policies).nbytes + np.array(values).nbytes) / len(sample_data)
+                    estimated_size_gb = (sample_size * len(self.training_data)) / (1024**3)
+
+                    # 检查是否有足够空间
+                    total, used, free = self._check_disk_space(self.config.DATA_DIR)
+                    if free > estimated_size_gb + self.min_free_space_gb:
+                        data_path = os.path.join(
+                            self.config.DATA_DIR,
+                            'final_training_data.npz'
+                        )
+
+                        states, policies, values = zip(*self.training_data)
+                        np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+                        self.logger.info(f"保存训练数据到: {data_path}")
+                    else:
+                        self.logger.warning(f"磁盘空间不足，跳过训练数据保存。需要: {estimated_size_gb:.1f}GB, 可用: {free:.1f}GB")
+
+                        # 尝试保存较小的样本数据
+                        sample_data = self.training_data[-1000:] if len(self.training_data) > 1000 else self.training_data
+                        if sample_data:
+                            data_path = os.path.join(
+                                self.config.DATA_DIR,
+                                'final_training_data_sample.npz'
+                            )
+                            states, policies, values = zip(*sample_data)
+                            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+                            self.logger.info(f"保存训练数据样本到: {data_path}")
+
+        except Exception as e:
+            self.logger.error(f"保存最终模型时出错: {e}")
+            # 即使出错也要尝试保存模型
+            try:
+                final_model_path = os.path.join(
+                    self.config.MODEL_DIR,
+                    'emergency_final_model.pth'
+                )
+                self.current_net.save(final_model_path)
+                self.logger.info(f"紧急保存模型到: {final_model_path}")
+            except Exception as e2:
+                self.logger.error(f"紧急保存也失败: {e2}")
+
+    def _check_disk_space(self, path: str) -> Tuple[float, float, float]:
+        """
+        检查指定路径的磁盘空间
+
+        Args:
+            path: 要检查的路径
+
+        Returns:
+            Tuple[float, float, float]: (总空间GB, 已用空间GB, 可用空间GB)
+        """
+        try:
+            stat = shutil.disk_usage(path)
+            total_gb = stat.total / (1024**3)
+            used_gb = (stat.total - stat.free) / (1024**3)
+            free_gb = stat.free / (1024**3)
+            return total_gb, used_gb, free_gb
+        except Exception as e:
+            self.logger.error(f"检查磁盘空间失败: {e}")
+            return 0.0, 0.0, 0.0
+
+    def _cleanup_old_files(self):
+        """清理旧的模型和数据文件以释放空间"""
+        try:
+            # 清理旧模型文件
+            model_files = list(Path(self.config.MODEL_DIR).glob("*.pth"))
+            if len(model_files) > self.max_model_files:
+                # 按修改时间排序，保留最新的文件
+                model_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                files_to_remove = model_files[self.max_model_files:]
+
+                for file_path in files_to_remove:
+                    try:
+                        file_path.unlink()
+                        self.logger.info(f"删除旧模型文件: {file_path}")
+                    except Exception as e:
+                        self.logger.error(f"删除文件失败 {file_path}: {e}")
+
+            # 清理旧数据文件
+            data_files = list(Path(self.config.DATA_DIR).glob("*.npz"))
+            if len(data_files) > self.max_data_files:
+                data_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                files_to_remove = data_files[self.max_data_files:]
+
+                for file_path in files_to_remove:
+                    try:
+                        file_path.unlink()
+                        self.logger.info(f"删除旧数据文件: {file_path}")
+                    except Exception as e:
+                        self.logger.error(f"删除文件失败 {file_path}: {e}")
+
+            # 清理旧日志文件（保留最近7天）
+            log_files = list(Path(self.config.LOG_DIR).rglob("*.log"))
+            current_time = time.time()
+            week_ago = current_time - (7 * 24 * 3600)  # 7天前
+
+            for log_file in log_files:
+                try:
+                    if log_file.stat().st_mtime < week_ago:
+                        log_file.unlink()
+                        self.logger.info(f"删除旧日志文件: {log_file}")
+                except Exception as e:
+                    self.logger.error(f"删除日志文件失败 {log_file}: {e}")
+
+        except Exception as e:
+            self.logger.error(f"清理文件时出错: {e}")
+
+    def _monitor_disk_space(self) -> bool:
+        """
+        监控磁盘空间，如果空间不足则进行清理
+
+        Returns:
+            bool: 是否有足够的磁盘空间继续训练
+        """
+        # 检查数据目录的磁盘空间
+        total, used, free = self._check_disk_space(self.config.DATA_DIR)
+
+        self.logger.info(f"磁盘空间状态 - 总计: {total:.1f}GB, 已用: {used:.1f}GB, 可用: {free:.1f}GB")
+
+        if free < self.min_free_space_gb:
+            self.logger.warning(f"磁盘空间不足! 可用空间: {free:.1f}GB < 最小要求: {self.min_free_space_gb}GB")
+            self.logger.info("开始清理旧文件...")
+
+            # 执行清理
+            self._cleanup_old_files()
+
+            # 重新检查空间
+            total, used, free = self._check_disk_space(self.config.DATA_DIR)
+            self.logger.info(f"清理后磁盘空间 - 总计: {total:.1f}GB, 已用: {used:.1f}GB, 可用: {free:.1f}GB")
+
+            if free < self.min_free_space_gb:
+                self.logger.error(f"清理后仍然空间不足! 可用: {free:.1f}GB < 要求: {self.min_free_space_gb}GB")
+                return False
+            else:
+                self.logger.info("清理成功，空间充足")
+
+        return True
+
     def _log_training_only_stats(self,
                                iteration: int, 
                                train_stats: Dict[str, float]):
