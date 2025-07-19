@@ -40,7 +40,7 @@ class Config:
         self.NUM_MCTS_SIMS = 400  # 减少模拟次数，加快对弈速度
         self.MCTS_BATCH_SIZE = 256 # (48 -> 256) 显著增大MCTS评估批次，提升self-play阶段的GPU利用率
         self.NUM_MCTS_SIMS_EVAL = 100  # 进一步降低评估复杂度
-        self.C_PUCT = 2.5  # 显著提高探索常数，打破循环陷阱
+        self.C_PUCT = 1.0  # 降低探索常数，更注重利用
         self.DIRICHLET_ALPHA = 0.3
         self.DIRICHLET_EPSILON = 0.25
         
@@ -62,7 +62,7 @@ class Config:
         self.NUM_SELF_PLAY_GAMES = 200  # 减少游戏数量，加快一轮迭代速度
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
         self.NUM_WORKERS = 6  # 核心修复：减少worker数量以避免启动时OOM
-        self.TEMP_THRESHOLD = 15 # 延长开局的随机探索阶段
+        self.TEMP_THRESHOLD = 30 # 延长开局的随机探索阶段
         
         # 评估配置
         self.EVAL_EPISODES = 10  # 减少评估对局数以加快速度

@@ -147,21 +147,19 @@ class ChessGame:
         from_square = move.from_square
         to_square = move.to_square
         
-        # 计算基本移动索引 (64 * 64 = 4096种可能移动)
-        move_idx = from_square * 64 + to_square
-        
         # 处理升变
         if move.promotion:
-            # 根据升变类型调整索引
-            # 升变为后(5)、车(4)、象(3)、马(2)
+            # 升变动作编码：to_square * 4 + promotion_type
             promotion_offset = {
-                chess.QUEEN: 0,
-                chess.ROOK: 1,
-                chess.BISHOP: 2,
-                chess.KNIGHT: 3
+                chess.QUEEN: 0, chess.ROOK: 1, 
+                chess.BISHOP: 2, chess.KNIGHT: 3
             }
-            # 在基本移动之后添加升变偏移
-            # 注意：这里假设策略数组大小为4096，包含了所有可能的移动
-            move_idx = 4096 - 16 + promotion_offset[move.promotion]
+            if move.promotion in promotion_offset:
+                move_idx = to_square * 4 + promotion_offset[move.promotion]
+                return move_idx if move_idx < 4096 else 0
+        else:
+            # 普通动作：from_square * 64 + to_square
+            move_idx = from_square * 64 + to_square
+            return move_idx if move_idx < 4096 else 0
         
-        return move_idx 
+        return 0 

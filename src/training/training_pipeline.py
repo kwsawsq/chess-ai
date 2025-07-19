@@ -308,25 +308,28 @@ class TrainingPipeline:
         self.logger.info(f"保存检查点到: {checkpoint_path}")
     
     def _save_final_model(self):
-        """保存最终模型"""
-        final_model_path = os.path.join(
-            self.config.MODEL_DIR,
-            'final_model.pth'
-        )
-        
+        """保存最终的模型和数据"""
+        final_model_path = os.path.join(self.config['model']['model_dir'], "final_model.pth")
         self.current_net.save(final_model_path)
         self.logger.info(f"保存最终模型到: {final_model_path}")
         
-        # 保存训练数据
-        data_path = os.path.join(
-            self.config.DATA_DIR,
-            'final_training_data.npz'
-        )
-        
-        if self.training_data:
-            states, policies, values = zip(*self.training_data)
+        # 只保存最后一个迭代的数据，以节省空间
+        last_iteration_data = self.training_data
+        if last_iteration_data:
+            states, policies, values = zip(*last_iteration_data)
+            data_dir = self.config['data']['data_dir']
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            
+            data_path = os.path.join(data_dir, f"final_data.npz")
+            try:
             np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
-        self.logger.info(f"保存训练数据到: {data_path}")
+                self.logger.info(f"最终数据已保存到: {data_path}")
+            except OSError as e:
+                self.logger.error(f"保存最终数据时出错: {e}")
+                raise
+        else:
+            self.logger.warning("没有可用于保存的最终数据")
     
     def _log_training_only_stats(self,
                                iteration: int, 

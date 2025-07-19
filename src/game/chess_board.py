@@ -160,21 +160,24 @@ class ChessBoard:
         from_square = move.from_square
         to_square = move.to_square
         
-        # 基础动作索引：from_square * 64 + to_square
-        action_idx = from_square * 64 + to_square
-        
         # 处理升变
         if move.promotion:
-            # 升变动作需要特殊编码
-            # 这里简化处理，实际可能需要更复杂的编码
+            # 升变动作编码：使用特殊的方式
+            # 对于升变，我们使用 to_square * 4 + promotion_type 的方式
             promotion_offset = {
                 chess.QUEEN: 0, chess.ROOK: 1, 
                 chess.BISHOP: 2, chess.KNIGHT: 3
             }
             if move.promotion in promotion_offset:
-                action_idx += promotion_offset[move.promotion] * 4096
+                # 升变动作：to_square * 4 + promotion_type
+                action_idx = to_square * 4 + promotion_offset[move.promotion]
+                return action_idx if action_idx < 4096 else None
+        else:
+            # 普通动作：from_square * 64 + to_square
+            action_idx = from_square * 64 + to_square
+            return action_idx if action_idx < 4096 else None
         
-        return action_idx if action_idx < 4096 else None
+        return None
     
     def action_to_move(self, action_idx: int) -> Optional[chess.Move]:
         """
@@ -189,21 +192,35 @@ class ChessBoard:
         if action_idx >= 4096:
             return None
         
-        from_square = action_idx // 64
-        to_square = action_idx % 64
-        
-        # 创建基础走法
-        move = chess.Move(from_square, to_square)
-        
-        # 检查是否为合法走法
-        if move in self.board.legal_moves:
-            return move
-        
-        # 检查升变走法
-        for promotion in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]:
-            promo_move = chess.Move(from_square, to_square, promotion)
-            if promo_move in self.board.legal_moves:
-                return promo_move
+        # 检查是否为升变动作
+        # 升变动作的范围是 0-255 (64 * 4)
+        if action_idx < 256:
+            # 这是升变动作
+            to_square = action_idx // 4
+            promotion_type = action_idx % 4
+            
+            promotion_map = {
+                0: chess.QUEEN, 1: chess.ROOK, 
+                2: chess.BISHOP, 3: chess.KNIGHT
+            }
+            
+            if promotion_type in promotion_map:
+                # 尝试找到所有可能的升变走法
+                for from_square in range(64):
+                    move = chess.Move(from_square, to_square, promotion_map[promotion_type])
+                    if move in self.board.legal_moves:
+                        return move
+        else:
+            # 这是普通动作
+            from_square = action_idx // 64
+            to_square = action_idx % 64
+            
+            # 创建基础走法
+            move = chess.Move(from_square, to_square)
+            
+            # 检查是否为合法走法
+            if move in self.board.legal_moves:
+                return move
         
         return None
     
@@ -264,6 +281,34 @@ class ChessBoard:
             return -1  # 黑方胜利
         else:
             return 0  # 平局
+    
+    def get_game_termination_reason(self) -> str:
+        """
+        获取游戏结束的原因
+        
+        Returns:
+            str: 游戏结束的原因
+        """
+        if not self.board.is_game_over():
+            return "游戏未结束"
+        
+        outcome = self.board.outcome()
+        if outcome is None:
+            return "未知原因"
+        
+        termination = outcome.termination
+        if termination == chess.Termination.CHECKMATE:
+            return "将军"
+        elif termination == chess.Termination.STALEMATE:
+            return "逼和"
+        elif termination == chess.Termination.INSUFFICIENT_MATERIAL:
+            return "子力不足"
+        elif termination == chess.Termination.FIFTY_MOVES:
+            return "50步规则"
+        elif termination == chess.Termination.THREEFOLD_REPETITION:
+            return "三次重复"
+        else:
+            return str(termination)
     
     def get_current_player(self) -> int:
         """

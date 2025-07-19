@@ -99,6 +99,10 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
             temp = 1 if len(game.board.board.move_stack) <= g_config.TEMP_THRESHOLD else 0
             move = game.select_move(policy, deterministic=(temp == 0))
             game.make_move(move)
+            
+            # 添加调试信息
+            if move_count <= 5 or move_count % 10 == 0:
+                logger.debug(f"[Worker {worker_id}] 第{move_count}步: {move}, 价值: {value:.3f}, 温度: {temp}")
 
         if not game.is_over():
             logger.warning(f"[Worker {worker_id}] 对弈异常结束，未分出胜负。")
@@ -106,6 +110,13 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
 
         game_result = game.get_result()
         logger.info(f"[Worker {worker_id}] 对弈结束，共 {move_count} 步，结果: {game_result}")
+        
+        # 添加更详细的结果信息
+        if game_result == 0:
+            termination_reason = game.board.get_game_termination_reason()
+            logger.info(f"[Worker {worker_id}] 和棋原因: {termination_reason}")
+        else:
+            logger.info(f"[Worker {worker_id}] 获胜方: {'白方' if game_result == 1 else '黑方'}")
 
         # 如果配置允许，保存PGN文件
         if g_config.SAVE_PGN:
