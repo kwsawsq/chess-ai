@@ -153,7 +153,7 @@ class TrainingPipeline:
                 )
                 
                 if new_examples:
-                self.training_data.extend(new_examples)
+                    self.training_data.extend(new_examples)
                     
                     if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
                         self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
@@ -172,25 +172,21 @@ class TrainingPipeline:
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
                 if train_stats:
-                self.training_history.append(train_stats)
+                    self.training_history.append(train_stats)
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
                 
                 # 3. 评估新模型（按间隔进行）
                 if iteration % self.config.EVAL_INTERVAL == 0:
-                self.logger.info("开始模型评估...")
-                evaluation_stats = self._evaluate_model()
+                    self.logger.info("开始模型评估...")
+                    evaluation_stats = self._evaluate_model()
                 else:
                     self.logger.info(f"跳过评估（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
                     evaluation_stats = None
                 
                 # 4. 保存检查点
                 if iteration % self.config.SAVE_INTERVAL == 0:
-                    # 保存前检查磁盘空间
-                    if self._monitor_disk_space():
-                        self._save_checkpoint(iteration, evaluation_stats)
-                    else:
-                        self.logger.warning("磁盘空间不足，跳过检查点保存")
+                    self._save_checkpoint(iteration, evaluation_stats)
                 
                 # 记录本次迭代信息
                 if evaluation_stats is not None:
@@ -204,10 +200,7 @@ class TrainingPipeline:
             self.logger.error(f"训练过程出错: {str(e)}", exc_info=True)
         finally:
             # 保存最终模型和训练数据
-            if self._monitor_disk_space():
-                self._save_final_model()
-            else:
-                self.logger.error("磁盘空间不足，无法保存最终模型")
+            self._save_final_model()
             self.stats['training_time'] = time.time() - start_time
             self.logger.info(f"训练结束，总用时: {self.stats['training_time']:.2f}秒")
     
@@ -242,14 +235,14 @@ class TrainingPipeline:
                 batch_data = self.training_data[i:i+self.config.BATCH_SIZE]
                 states, policy_targets, value_targets = zip(*batch_data)
 
-        states = np.array(states)
-        policy_targets = np.array(policy_targets)
-        value_targets = np.array(value_targets)
-        
+                states = np.array(states)
+                policy_targets = np.array(policy_targets)
+                value_targets = np.array(value_targets)
+                
                 loss_dict = self.current_net.train_step(
-            states,
-            policy_targets,
-            value_targets,
+                    states,
+                    policy_targets,
+                    value_targets,
                     optimizer, 
                     criterion
                 )
@@ -331,7 +324,7 @@ class TrainingPipeline:
     
     def _save_final_model(self):
         """保存最终的模型和数据"""
-        final_model_path = os.path.join(self.config['model']['model_dir'], "final_model.pth")
+        final_model_path = os.path.join(self.config.MODEL_DIR, "final_model.pth")
         self.current_net.save(final_model_path)
         self.logger.info(f"保存最终模型到: {final_model_path}")
         
@@ -339,7 +332,7 @@ class TrainingPipeline:
         last_iteration_data = self.training_data
         if last_iteration_data:
             states, policies, values = zip(*last_iteration_data)
-            data_dir = self.config['data']['data_dir']
+            data_dir = self.config.DATA_DIR
             if not os.path.exists(data_dir):
                 os.makedirs(data_dir)
             
