@@ -71,8 +71,8 @@ class SelfPlay:
                         else:
                             self.logger.error(f"一个自我对弈任务失败: {e}", exc_info=True)
                         progress_bar.update(1) # 即使失败也要更新进度条
-        
-        progress_bar.close()
+                
+                progress_bar.close()
         
         except Exception as e:
              self.logger.error(f"创建进程池时发生严重错误: {e}", exc_info=True)
