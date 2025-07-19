@@ -141,10 +141,7 @@ class TrainingPipeline:
                 self.stats['iteration'] = iteration
                 self.logger.info(f"开始训练迭代 {iteration}/{num_total_iterations}")
 
-                # 0. 检查磁盘空间
-                if not self._monitor_disk_space():
-                    self.logger.error("磁盘空间不足，停止训练")
-                    break
+                # 0. 检查磁盘空间（已移除磁盘空间监控功能）
 
                 # 1. 自我对弈生成数据
                 self.logger.info("开始自我对弈...")
