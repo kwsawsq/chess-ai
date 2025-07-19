@@ -23,9 +23,11 @@ class Config:
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR]:
             os.makedirs(dir_path, exist_ok=True)
 
-        print(f"数据目录: {self.DATA_DIR}")
-        print(f"模型目录: {self.MODEL_DIR}")
-        print(f"日志目录: {self.LOG_DIR}")
+        # 只在详细模式下打印目录信息
+        if not hasattr(self, 'QUIET_MODE') or not self.QUIET_MODE:
+            print(f"数据目录: {self.DATA_DIR}")
+            print(f"模型目录: {self.MODEL_DIR}")
+            print(f"日志目录: {self.LOG_DIR}")
         
         # GPU配置
         self.USE_GPU = torch.cuda.is_available()
@@ -121,8 +123,10 @@ class Config:
             torch.cuda.empty_cache()
             torch.jit.enable_onednn_fusion(True)
         
-        # 进度显示 - 更频繁地显示进度
-        self.SHOW_PROGRESS = True
-        self.PROGRESS_INTERVAL = 5  # 每5步显示一次进度
+        # 进度显示 - 减少终端输出
+        self.SHOW_PROGRESS = False  # 关闭详细进度显示
+        self.PROGRESS_INTERVAL = 10  # 每10步显示一次进度
+        self.VERBOSE_LOGGING = False  # 关闭详细日志
+        self.QUIET_MODE = True  # 静默模式，只显示重要信息
 
 config = Config() 

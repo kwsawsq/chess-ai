@@ -52,14 +52,12 @@ def find_latest_checkpoint(config):
 def get_optimal_workers_for_gpu():
     """根据GPU内存和CPU核心数，为自我对弈任务建议工作进程数"""
     cpu_count = psutil.cpu_count(logical=True)
-    print(f"系统检测到 {cpu_count} 个CPU核心")
     
     # 对于GPU上的自我对弈，每个worker都会加载一个模型，因此主要瓶颈是GPU显存。
     # 一个比较安全的值是4-8，具体取决于模型大小和GPU显存。
     # 我们这里推荐一个保守值，以避免显存不足。
     recommended_workers = 4
     
-    print("考虑到每个工作进程都需要在GPU上加载模型，推荐使用较少的工作进程以避免显存不足。")
     return recommended_workers
 
 def main():
@@ -72,32 +70,36 @@ def main():
 
     logger, log_file = setup_logging(config)
     
-    print("=== 修复的测试训练脚本 ===")
-    print(f"日志文件: {log_file}")
+    # 静默模式下减少输出
+    if not config.QUIET_MODE:
+        print("=== 修复的测试训练脚本 ===")
+        print(f"日志文件: {log_file}")
     
-    # 优化工作进程数
+    # 优化工作进程数（静默模式）
     optimal_workers = get_optimal_workers_for_gpu()
-    if optimal_workers != config.NUM_WORKERS:
+    if optimal_workers != config.NUM_WORKERS and not config.QUIET_MODE:
         use_optimal = input(f"是否使用建议的工作进程数（{optimal_workers}）? (y/n): ").lower() == 'y'
         if use_optimal:
             config.NUM_WORKERS = optimal_workers
     
-    print(f"\n配置信息:")
-    print(f"  - 迭代次数: {config.NUM_ITERATIONS}")
-    print(f"  - 自我对弈游戏数: {config.NUM_SELF_PLAY_GAMES}")
-    print(f"  - 工作进程数: {config.NUM_WORKERS}")
-    print(f"  - 评估间隔: {config.EVAL_INTERVAL}")
-    print(f"")
+    if not config.QUIET_MODE:
+        print(f"\n配置信息:")
+        print(f"  - 迭代次数: {config.NUM_ITERATIONS}")
+        print(f"  - 自我对弈游戏数: {config.NUM_SELF_PLAY_GAMES}")
+        print(f"  - 工作进程数: {config.NUM_WORKERS}")
+        print(f"  - 评估间隔: {config.EVAL_INTERVAL}")
+        print(f"")
     
     # 查找是否有检查点文件
     latest_checkpoint = find_latest_checkpoint(config)
-    if latest_checkpoint:
+    if latest_checkpoint and not config.QUIET_MODE:
         print(f"发现检查点文件: {latest_checkpoint}")
         print("⚠️  注意：由于模型架构已优化，旧检查点不兼容。")
         print("建议从头开始训练以获得最佳性能。")
         use_checkpoint = input("是否强制尝试加载检查点? (建议选择n) (y/n): ").lower() == 'y'
     else:
-        print("未发现检查点文件，将重新开始训练")
+        if not config.QUIET_MODE:
+            print("未发现检查点文件，将重新开始训练")
         use_checkpoint = False
     
     # 创建训练流水线
