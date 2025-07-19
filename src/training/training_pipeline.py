@@ -6,7 +6,9 @@
 import os
 import time
 import logging
+import shutil
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 import numpy as np
 from datetime import datetime
 import torch
@@ -70,6 +72,14 @@ class TrainingPipeline:
             'best_win_rate': 0.0,
             'training_time': 0.0
         }
+
+        # 磁盘空间管理
+        self.min_free_space_gb = 1.0  # 最小保留空间(GB)
+        self.max_model_files = 5      # 最多保留的模型文件数
+        self.max_data_files = 3       # 最多保留的数据文件数
+
+        # 磁盘空间管理
+        self.min_free_space_gb = 1.0  # 最小保留空间(GB)
     
     def _setup_logging(self):
         """设置日志"""
@@ -130,7 +140,12 @@ class TrainingPipeline:
             for iteration in range(start_iteration, num_total_iterations + 1):
                 self.stats['iteration'] = iteration
                 self.logger.info(f"开始训练迭代 {iteration}/{num_total_iterations}")
-                
+
+                # 0. 检查磁盘空间
+                if not self._monitor_disk_space():
+                    self.logger.error("磁盘空间不足，停止训练")
+                    break
+
                 # 1. 自我对弈生成数据
                 self.logger.info("开始自我对弈...")
                 new_examples = self.self_play.generate_training_data(
@@ -171,7 +186,11 @@ class TrainingPipeline:
                 
                 # 4. 保存检查点
                 if iteration % self.config.SAVE_INTERVAL == 0:
-                    self._save_checkpoint(iteration, evaluation_stats)
+                    # 保存前检查磁盘空间
+                    if self._monitor_disk_space():
+                        self._save_checkpoint(iteration, evaluation_stats)
+                    else:
+                        self.logger.warning("磁盘空间不足，跳过检查点保存")
                 
                 # 记录本次迭代信息
                 if evaluation_stats is not None:
@@ -185,7 +204,10 @@ class TrainingPipeline:
             self.logger.error(f"训练过程出错: {str(e)}", exc_info=True)
         finally:
             # 保存最终模型和训练数据
-            self._save_final_model()
+            if self._monitor_disk_space():
+                self._save_final_model()
+            else:
+                self.logger.error("磁盘空间不足，无法保存最终模型")
             self.stats['training_time'] = time.time() - start_time
             self.logger.info(f"训练结束，总用时: {self.stats['training_time']:.2f}秒")
     
@@ -323,14 +345,13 @@ class TrainingPipeline:
             
             data_path = os.path.join(data_dir, f"final_data.npz")
             try:
-            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+                np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
                 self.logger.info(f"最终数据已保存到: {data_path}")
             except OSError as e:
                 self.logger.error(f"保存最终数据时出错: {e}")
                 raise
         else:
             self.logger.warning("没有可用于保存的最终数据")
-    
     def _log_training_only_stats(self,
                                iteration: int, 
                                train_stats: Dict[str, float]):

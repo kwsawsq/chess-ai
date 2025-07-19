@@ -10,10 +10,67 @@ import sys
 import os
 import logging
 from datetime import datetime
+import chess
 
 # 全局变量
 g_model: Optional[Any] = None
 g_config: Optional[Any] = None
+
+def apply_anti_repetition_penalty(game, policy, config):
+    """
+    应用反重复走棋惩罚
+
+    Args:
+        game: 游戏对象
+        policy: 原始策略
+        config: 配置对象
+
+    Returns:
+        修正后的策略
+    """
+    if not hasattr(config, 'REPETITION_PENALTY'):
+        return policy
+
+    try:
+        # 获取最近的棋盘状态
+        current_fen = game.board.get_board_hash()
+        recent_positions = [fen.split()[0] for fen in game.board.history[-8:]]  # 检查最近8步
+
+        # 计算当前局面的重复次数
+        repetition_count = recent_positions.count(current_fen)
+
+        if repetition_count > 1:
+            # 对导致重复局面的走法施加惩罚
+            penalty_factor = config.REPETITION_PENALTY ** (repetition_count - 1)
+
+            # 获取合法走法
+            legal_moves = list(game.board.board.legal_moves)
+
+            for move in legal_moves:
+                # 模拟走法
+                game_copy = game.board.copy()
+                game_copy.make_move(move)
+
+                # 检查这个走法是否会导致重复
+                new_fen = game_copy.get_board_hash()
+                if new_fen in recent_positions:
+                    # 对这个走法的概率施加惩罚
+                    move_idx = game.move_to_index(move)
+                    if move_idx < len(policy):
+                        policy[move_idx] *= penalty_factor
+
+            # 重新归一化
+            legal_indices = [game.move_to_index(move) for move in legal_moves]
+            legal_probs = policy[legal_indices]
+            if np.sum(legal_probs) > 0:
+                legal_probs = legal_probs / np.sum(legal_probs)
+                policy[legal_indices] = legal_probs
+
+    except Exception as e:
+        # 如果出错，返回原始策略
+        logging.getLogger(__name__).warning(f"反重复惩罚应用失败: {e}")
+
+    return policy
 
 def init_worker_self_play(model_state: Dict, config: Any):
     """
@@ -86,18 +143,36 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
 
         while not game.is_over():
             move_count += 1
-            # logger.debug(f"[Worker {worker_id}] 对弈进行中，第 {move_count} 步...")
-            
+
+            # 检查最大游戏长度限制
+            if hasattr(g_config, 'MAX_GAME_LENGTH') and move_count > g_config.MAX_GAME_LENGTH:
+                logger.info(f"[Worker {worker_id}] 达到最大游戏长度 {g_config.MAX_GAME_LENGTH}，判定为和棋")
+                break
+
+            # 检查重复局面
+            if hasattr(g_config, 'DRAW_THRESHOLD') and game.board.is_repetition():
+                logger.info(f"[Worker {worker_id}] 检测到重复局面，判定为和棋")
+                break
+
             # 使用MCTS进行搜索
             policy, value = mcts.search(game.board, add_noise=True)
-            
+
+            # 反重复走棋机制
+            if hasattr(g_config, 'ANTI_REPETITION') and g_config.ANTI_REPETITION:
+                policy = apply_anti_repetition_penalty(game, policy, g_config)
+
             states_hist.append(game.get_state())
             policies_hist.append(policy)
             values_hist.append(value)
-            
+
             # 根据温度参数选择确定性或随机性走法
             temp = 1 if len(game.board.board.move_stack) <= g_config.TEMP_THRESHOLD else 0
             move = game.select_move(policy, deterministic=(temp == 0))
+
+            if not move:  # 如果没有合法走法
+                logger.warning(f"[Worker {worker_id}] 没有合法走法，游戏结束")
+                break
+
             game.make_move(move)
             
             # 添加调试信息
