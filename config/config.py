@@ -27,11 +27,7 @@ class Config:
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR, self.PGN_DIR]:
             os.makedirs(dir_path, exist_ok=True)
 
-        # 只在详细模式下打印目录信息
-        if not hasattr(self, 'QUIET_MODE') or not self.QUIET_MODE:
-            print(f"数据目录: {self.DATA_DIR}")
-            print(f"模型目录: {self.MODEL_DIR}")
-            print(f"日志目录: {self.LOG_DIR}")
+        # 静默模式下不打印目录信息
         
         # GPU配置
         self.USE_GPU = torch.cuda.is_available()

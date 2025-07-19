@@ -181,7 +181,7 @@ class AlphaZeroNet(nn.Module):
             states_tensor = torch.from_numpy(states).to(self.device)
             
             if self.use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     policy_logits, value = self(states_tensor)
             else:
                 policy_logits, value = self(states_tensor)
