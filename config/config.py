@@ -10,15 +10,9 @@ class Config:
         # 基础目录
         self.BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        # 数据盘路径配置 - 用于解决磁盘空间不足问题
-        # 在autodl环境中，通常数据盘挂载在 /root/autodl-tmp
-        # 您可以根据实际情况修改这个路径
-        self.DATA_DISK_PATH = os.environ.get('CHESS_AI_DATA_PATH', '/root/autodl-tmp')
-
-        # 如果数据盘路径不存在，回退到项目目录
-        if not os.path.exists(self.DATA_DISK_PATH):
-            print(f"警告: 数据盘路径 {self.DATA_DISK_PATH} 不存在，使用项目目录")
-            self.DATA_DISK_PATH = self.BASE_DIR
+        # 数据盘路径配置 - 使用项目目录
+        # 将数据保存在项目目录下，便于管理
+        self.DATA_DISK_PATH = os.environ.get('CHESS_AI_DATA_PATH', self.BASE_DIR)
 
         # 数据目录 - 使用数据盘
         self.DATA_DIR = os.path.join(self.DATA_DISK_PATH, 'chess-ai-data')
