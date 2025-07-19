@@ -60,8 +60,10 @@ def monitor_system():
 def benchmark_model_inference():
     """测试模型推理性能"""
     print("=== 模型推理性能测试 ===")
-    
-    sys.path.append('/root/chess-ai')
+
+    # 使用相对路径而不是硬编码的绝对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(current_dir)
     from config.config import config
     from src.neural_network.model import AlphaZeroNet
     
@@ -104,8 +106,10 @@ def benchmark_model_inference():
 def benchmark_mcts_performance():
     """测试MCTS性能"""
     print("=== MCTS性能测试 ===")
-    
-    sys.path.append('/root/chess-ai')
+
+    # 使用相对路径而不是硬编码的绝对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(current_dir)
     from config.config import config
     from src.neural_network.model import AlphaZeroNet
     from src.mcts.mcts import MCTS

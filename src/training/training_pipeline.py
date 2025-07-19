@@ -138,7 +138,7 @@ class TrainingPipeline:
                 )
                 
                 if new_examples:
-                    self.training_data.extend(new_examples)
+                self.training_data.extend(new_examples)
                     
                     if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
                         self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
@@ -157,14 +157,14 @@ class TrainingPipeline:
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
                 if train_stats:
-                    self.training_history.append(train_stats)
+                self.training_history.append(train_stats)
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
                 
                 # 3. 评估新模型（按间隔进行）
                 if iteration % self.config.EVAL_INTERVAL == 0:
-                    self.logger.info("开始模型评估...")
-                    evaluation_stats = self._evaluate_model()
+                self.logger.info("开始模型评估...")
+                evaluation_stats = self._evaluate_model()
                 else:
                     self.logger.info(f"跳过评估（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
                     evaluation_stats = None
@@ -178,7 +178,7 @@ class TrainingPipeline:
                     self._log_iteration_stats(iteration, train_stats, evaluation_stats)
                 else:
                     self._log_training_only_stats(iteration, train_stats)
-
+                
         except KeyboardInterrupt:
             self.logger.info("训练被用户中断")
         except Exception as e:
@@ -220,14 +220,14 @@ class TrainingPipeline:
                 batch_data = self.training_data[i:i+self.config.BATCH_SIZE]
                 states, policy_targets, value_targets = zip(*batch_data)
 
-                states = np.array(states)
-                policy_targets = np.array(policy_targets)
-                value_targets = np.array(value_targets)
-                
+        states = np.array(states)
+        policy_targets = np.array(policy_targets)
+        value_targets = np.array(value_targets)
+        
                 loss_dict = self.current_net.train_step(
-                    states,
-                    policy_targets,
-                    value_targets,
+            states,
+            policy_targets,
+            value_targets,
                     optimizer, 
                     criterion
                 )
@@ -413,10 +413,10 @@ class TrainingPipeline:
             if 'training_data' in checkpoint:
                 self.logger.info(f"检查点包含 {len(checkpoint['training_data'])} 条训练数据，本次不加载以加快启动速度。")
 
-            return True
+                return True
         except Exception as e:
             self.logger.error(f"加载检查点 {checkpoint_path} 失败: {e}", exc_info=True)
-            return False
+        return False
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取当前训练统计信息"""

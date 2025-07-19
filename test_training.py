@@ -5,7 +5,10 @@
 
 import sys
 import os
-sys.path.append('/root/chess-ai')
+
+# 使用相对路径而不是硬编码的绝对路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
 
 from config.config import config
 from src.training.training_pipeline import TrainingPipeline

@@ -190,7 +190,7 @@ class AlphaZeroNet(nn.Module):
             value = value.cpu().numpy()
             
         return policy, value
-
+    
     def train_step(self,
                   states: np.ndarray,
                   policy_targets: np.ndarray,

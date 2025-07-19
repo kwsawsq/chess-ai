@@ -416,10 +416,22 @@ class DataManager:
         }
         
         return metrics
-    
+
+    def get_last_iteration_data(self) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """获取最后一个迭代（批次）的数据"""
+        if not self.replay_buffer:
+            return None
+        
+        last_game_data = self.replay_buffer[-1]
+        states = np.array(last_game_data['states'])
+        policies = np.array(last_game_data['mcts_policies'])
+        values = np.array(last_game_data['values'])
+        
+        return states, policies, values
+
     def __len__(self) -> int:
         """返回缓冲区大小"""
-        return len(self.replay_buffer)
+        return self.stats['buffer_size']
     
     def __str__(self) -> str:
         """字符串表示"""
