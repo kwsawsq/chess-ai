@@ -20,7 +20,7 @@ class Config:
         self.LOG_DIR = os.path.join(self.BASE_DIR, 'logs')
 
         # 创建必要的目录
-        for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR]:
+        for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR, self.PGN_DIR]:
             os.makedirs(dir_path, exist_ok=True)
 
         # 只在详细模式下打印目录信息

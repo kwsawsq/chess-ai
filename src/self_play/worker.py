@@ -86,13 +86,13 @@ def init_worker_self_play(model_state: Dict, config: Any):
         os.makedirs(worker_log_dir, exist_ok=True)
         worker_log_file = os.path.join(worker_log_dir, f'worker_{os.getpid()}.log')
         
-        # 配置日志
+        # 配置日志 - 减少终端输出
         logging.basicConfig(
-            level=logging.DEBUG,
+            level=logging.INFO,  # 改为INFO级别，减少DEBUG输出
             format='%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler(worker_log_file),
-                logging.StreamHandler(sys.stdout) # 将日志也输出到标准输出
+                # 移除标准输出，减少终端日志
             ],
             force=True # 覆盖任何现有的日志配置
         )
@@ -175,9 +175,7 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
 
             game.make_move(move)
             
-            # 添加调试信息
-            if move_count <= 5 or move_count % 10 == 0:
-                logger.debug(f"[Worker {worker_id}] 第{move_count}步: {move}, 价值: {value:.3f}, 温度: {temp}")
+            # 移除调试信息，减少日志输出
 
         if not game.is_over():
             logger.warning(f"[Worker {worker_id}] 对弈异常结束，未分出胜负。")
@@ -208,7 +206,7 @@ def play_one_game_worker() -> Optional[List[Tuple[np.ndarray, np.ndarray, float]
                 pgn_data = game.board.export_pgn()
                 with open(pgn_filepath, "w", encoding="utf-8") as f:
                     f.write(pgn_data)
-                logger.debug(f"[Worker {worker_id}] PGN棋谱已保存至 {pgn_filepath}")
+                logger.info(f"[Worker {worker_id}] PGN棋谱已保存至 {pgn_filepath}")
                 
             except Exception as e:
                 logger.error(f"[Worker {worker_id}] 保存PGN文件时出错: {e}", exc_info=True)
