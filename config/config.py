@@ -79,6 +79,8 @@ class Config:
         self.PARALLEL_GAMES = 16  # 增加并行游戏数
         self.NUM_WORKERS = 6  # 核心修复：减少worker数量以避免启动时OOM
         self.TEMP_THRESHOLD = 15 # 延长开局的随机探索阶段
+        self.MAX_GAME_LENGTH = 200  # 最大游戏步数，防止无限循环
+        self.DRAW_THRESHOLD = 3  # 重复局面次数达到此值时判定为和棋
         
         # 评估配置
         self.EVAL_EPISODES = 10  # 减少评估对局数以加快速度
