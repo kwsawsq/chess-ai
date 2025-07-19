@@ -18,6 +18,10 @@ class Config:
         self.DATA_DIR = os.path.join(self.BASE_DIR, 'data')
         self.MODEL_DIR = os.path.join(self.BASE_DIR, 'models')
         self.LOG_DIR = os.path.join(self.BASE_DIR, 'logs')
+        
+        # PGN棋谱保存
+        self.SAVE_PGN = True  # 是否保存自我对弈的棋谱
+        self.PGN_DIR = os.path.join(self.BASE_DIR, 'data', 'games') # PGN文件保存目录
 
         # 创建必要的目录
         for dir_path in [self.DATA_DIR, self.MODEL_DIR, self.LOG_DIR, self.PGN_DIR]:
@@ -101,10 +105,6 @@ class Config:
         # 日志设置
         self.TENSORBOARD_LOG_DIR = os.path.join(self.LOG_DIR, 'tensorboard')
         self.ENABLE_LOGGING = True
-        
-        # PGN棋谱保存
-        self.SAVE_PGN = True  # 是否保存自我对弈的棋谱
-        self.PGN_DIR = os.path.join(self.BASE_DIR, 'data', 'games') # PGN文件保存目录
         
         # 性能优化
         self.PIN_MEMORY = True
