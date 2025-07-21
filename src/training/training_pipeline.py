@@ -150,11 +150,9 @@ class TrainingPipeline:
                 )
                 
                 if new_examples:
-                self.training_data.extend(new_examples)
-                    
+                    self.training_data.extend(new_examples)
                     if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
                         self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
-                
                     self.stats['total_games'] += self.config.NUM_SELF_PLAY_GAMES
                     self.logger.info(f"生成了 {len(new_examples)} 个新样本, 当前总样本数: {len(self.training_data)}")
                 else:
@@ -169,14 +167,14 @@ class TrainingPipeline:
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
                 if train_stats:
-                self.training_history.append(train_stats)
+                    self.training_history.append(train_stats)
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
                 
                 # 3. 评估新模型（按间隔进行）
                 if iteration % self.config.EVAL_INTERVAL == 0:
-                self.logger.info("开始模型评估...")
-                evaluation_stats = self._evaluate_model()
+                    self.logger.info("开始模型评估...")
+                    evaluation_stats = self._evaluate_model()
                 else:
                     self.logger.info(f"跳过评估（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
                     evaluation_stats = None
@@ -232,14 +230,14 @@ class TrainingPipeline:
                 batch_data = self.training_data[i:i+self.config.BATCH_SIZE]
                 states, policy_targets, value_targets = zip(*batch_data)
 
-        states = np.array(states)
-        policy_targets = np.array(policy_targets)
-        value_targets = np.array(value_targets)
-        
+                states = np.array(states)
+                policy_targets = np.array(policy_targets)
+                value_targets = np.array(value_targets)
+                
                 loss_dict = self.current_net.train_step(
-            states,
-            policy_targets,
-            value_targets,
+                    states,
+                    policy_targets,
+                    value_targets,
                     optimizer, 
                     criterion
                 )
@@ -340,7 +338,7 @@ class TrainingPipeline:
             
             data_path = os.path.join(data_dir, f"final_data.npz")
             try:
-            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+                np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
                 # 使用相对路径显示
                 home_dir = os.path.expanduser('~')
                 display_path = data_path.replace(home_dir, '~')
