@@ -150,9 +150,11 @@ class TrainingPipeline:
                 )
                 
                 if new_examples:
-                    self.training_data.extend(new_examples)
+                self.training_data.extend(new_examples)
+                    
                     if len(self.training_data) > self.config.REPLAY_BUFFER_SIZE:
                         self.training_data = self.training_data[-self.config.REPLAY_BUFFER_SIZE:]
+                
                     self.stats['total_games'] += self.config.NUM_SELF_PLAY_GAMES
                     self.logger.info(f"生成了 {len(new_examples)} 个新样本, 当前总样本数: {len(self.training_data)}")
                 else:
@@ -167,14 +169,14 @@ class TrainingPipeline:
                 self.logger.info("开始网络训练...")
                 train_stats = self._train_network()
                 if train_stats:
-                    self.training_history.append(train_stats)
+                self.training_history.append(train_stats)
                 else:
                     self.logger.warning("网络训练未返回统计数据。")
                 
                 # 3. 评估新模型（按间隔进行）
                 if iteration % self.config.EVAL_INTERVAL == 0:
-                    self.logger.info("开始模型评估...")
-                    evaluation_stats = self._evaluate_model()
+                self.logger.info("开始模型评估...")
+                evaluation_stats = self._evaluate_model()
                 else:
                     self.logger.info(f"跳过评估（将在第 {(iteration // self.config.EVAL_INTERVAL + 1) * self.config.EVAL_INTERVAL} 次迭代时评估）")
                     evaluation_stats = None
@@ -230,14 +232,14 @@ class TrainingPipeline:
                 batch_data = self.training_data[i:i+self.config.BATCH_SIZE]
                 states, policy_targets, value_targets = zip(*batch_data)
 
-                states = np.array(states)
-                policy_targets = np.array(policy_targets)
-                value_targets = np.array(value_targets)
-                
+        states = np.array(states)
+        policy_targets = np.array(policy_targets)
+        value_targets = np.array(value_targets)
+        
                 loss_dict = self.current_net.train_step(
-                    states,
-                    policy_targets,
-                    value_targets,
+            states,
+            policy_targets,
+            value_targets,
                     optimizer, 
                     criterion
                 )
@@ -266,10 +268,11 @@ class TrainingPipeline:
         """
         self.logger.info("开始模型评估...")
         
-        # 创建一个"旧"模型用于对比
+        # 创建一个“旧”模型用于对比
         previous_net = AlphaZeroNet(self.config)
-        # 不复制当前模型的权重，让previous_net保持随机初始化状态
-        # 这样可以测试当前模型是否能战胜随机策略
+        # 简单地从当前模型复制权重作为“旧”模型
+        # 在实际应用中, 你可能需要加载上一个最好的模型
+        previous_net.load_state_dict(self.current_net.state_dict())
         
         # 使用评估器进行评估
         win_rate, draw_rate, loss_rate = self.evaluator.evaluate(
@@ -314,19 +317,13 @@ class TrainingPipeline:
             'eval_stats': eval_stats,
             'training_data_sample': self.training_data[:1000] # Save a sample
         })
-        # 使用相对路径显示
-        home_dir = os.path.expanduser('~')
-        display_path = checkpoint_path.replace(home_dir, '~')
-        self.logger.info(f"保存检查点到: {display_path}")
+        self.logger.info(f"保存检查点到: {checkpoint_path}")
     
     def _save_final_model(self):
         """保存最终的模型和数据"""
         final_model_path = os.path.join(self.config.MODEL_DIR, "final_model.pth")
         self.current_net.save(final_model_path)
-        # 使用相对路径显示
-        home_dir = os.path.expanduser('~')
-        display_path = final_model_path.replace(home_dir, '~')
-        self.logger.info(f"保存最终模型到: {display_path}")
+        self.logger.info(f"保存最终模型到: {final_model_path}")
         
         # 只保存最后一个迭代的数据，以节省空间
         last_iteration_data = self.training_data
@@ -338,11 +335,8 @@ class TrainingPipeline:
             
             data_path = os.path.join(data_dir, f"final_data.npz")
             try:
-                np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
-                # 使用相对路径显示
-                home_dir = os.path.expanduser('~')
-                display_path = data_path.replace(home_dir, '~')
-                self.logger.info(f"最终数据已保存到: {display_path}")
+            np.savez(data_path, states=np.array(states), policies=np.array(policies), values=np.array(values))
+                self.logger.info(f"最终数据已保存到: {data_path}")
             except OSError as e:
                 self.logger.error(f"保存最终数据时出错: {e}")
                 raise
