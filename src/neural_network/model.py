@@ -257,7 +257,10 @@ class AlphaZeroNet(nn.Module):
                 save_data.update(additional_data)
             
             torch.save(save_data, filepath)
-            self.logger.info(f"模型已保存到: {filepath}")
+            # 使用相对路径显示
+            home_dir = os.path.expanduser('~')
+            display_path = filepath.replace(home_dir, '~')
+            self.logger.info(f"模型已保存到: {display_path}")
             return True
             
         except Exception as e:
